@@ -1,0 +1,7 @@
+[package]
+name = "els-types"
+version.workspace = true
+edition.workspace = true
+description = "公共类型与错误定义，供其他 crate 共享。本 crate 不依赖任何业务 crate（依赖方向的最底层）。"
+
+[dependencies]

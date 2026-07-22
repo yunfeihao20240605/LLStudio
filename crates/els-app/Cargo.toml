@@ -1,0 +1,20 @@
+[package]
+name = "els-app"
+version.workspace = true
+edition.workspace = true
+description = "组合根（main.rs）：唯一装配所有实现并启动 QML 引擎的地方。"
+
+[dependencies]
+cxx-qt.workspace = true
+cxx-qt-lib = { workspace = true, features = ["qt_gui", "qt_qml"] }
+libc = "0.2"
+els-types = { path = "../els-types" }
+els-media-core = { path = "../els-media-core" }
+els-waveform-core = { path = "../els-waveform-core" }
+els-subtitle-core = { path = "../els-subtitle-core" }
+els-learning-core = { path = "../els-learning-core" }
+els-storage = { path = "../els-storage" }
+els-qt-bridge = { path = "../els-qt-bridge" }
+
+[build-dependencies]
+cxx-qt-build.workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "els-media-core"
+version.workspace = true
+edition.workspace = true
+description = "播放/解码核心逻辑，只暴露 MediaController trait。不依赖 Qt/cxx-qt，可脱离 Qt runtime 单元测试。"
+
+[build-dependencies]
+
+[dependencies]
+libc = "0.2"
+els-types = { path = "../els-types" }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"

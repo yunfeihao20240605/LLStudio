@@ -1,0 +1,9 @@
+[package]
+name = "els-waveform-core"
+version.workspace = true
+edition.workspace = true
+description = "波形生成与分析核心逻辑，只暴露 WaveformEngine trait。不依赖 Qt/cxx-qt。"
+
+[dependencies]
+els-types = { path = "../els-types" }
+ffmpeg-next = { version = "8.1.0", default-features = false, features = ["codec", "format", "software-resampling"] }

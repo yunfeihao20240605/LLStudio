@@ -1,0 +1,8 @@
+[package]
+name = "els-subtitle-core"
+version.workspace = true
+edition.workspace = true
+description = "字幕解析与查询核心逻辑，只暴露 SubtitleProvider trait。不依赖 Qt/cxx-qt。"
+
+[dependencies]
+els-types = { path = "../els-types" }

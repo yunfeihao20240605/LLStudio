@@ -1,0 +1,10 @@
+[package]
+name = "els-storage"
+version.workspace = true
+edition.workspace = true
+description = "数据持久化实现（SQLite），实现 els-learning-core 定义的 SegmentRepository trait（依赖倒置）。"
+
+[dependencies]
+els-types = { path = "../els-types" }
+els-learning-core = { path = "../els-learning-core" }
+rusqlite = { version = "0.32.1", features = ["bundled"] }

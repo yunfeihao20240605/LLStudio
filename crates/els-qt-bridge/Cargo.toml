@@ -1,0 +1,20 @@
+[package]
+name = "els-qt-bridge"
+version.workspace = true
+edition.workspace = true
+description = "唯一依赖 Qt/cxx-qt 的薄适配层，只做 core trait 与 QObject 之间的转换，不写业务逻辑（见技术方案 3.4 节）。"
+links = "els_qt_bridge"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib = { workspace = true, features = ["qt_gui", "qt_qml"] }
+els-types = { path = "../els-types" }
+els-media-core = { path = "../els-media-core" }
+els-waveform-core = { path = "../els-waveform-core" }
+els-subtitle-core = { path = "../els-subtitle-core" }
+els-learning-core = { path = "../els-learning-core" }
+els-storage = { path = "../els-storage" }
+
+[build-dependencies]
+cxx-qt-build.workspace = true

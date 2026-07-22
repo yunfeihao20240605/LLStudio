@@ -1,0 +1,8 @@
+[package]
+name = "els-learning-core"
+version.workspace = true
+edition.workspace = true
+description = "片段循环训练与学习进度核心逻辑，暴露 LearningManager 与 SegmentRepository trait。不依赖 Qt/cxx-qt，也不依赖具体存储实现（依赖倒置）。"
+
+[dependencies]
+els-types = { path = "../els-types" }

@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/els-types",
+    "crates/els-media-core",
+    "crates/els-waveform-core",
+    "crates/els-subtitle-core",
+    "crates/els-learning-core",
+    "crates/els-storage",
+    "crates/els-qt-bridge",
+    "crates/els-app",
+]
+
+# 依赖版本在真正实现各 crate 时再固定（例如 cxx-qt、rusqlite 等）。
+# 本文件仅搭建 workspace 骨架，用于验证 crate 划分与依赖方向是否正确。
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+cxx = "1.0.197"
+cxx-qt = "0.9.1"
+cxx-qt-lib = "0.9.1"
+cxx-qt-build = "0.9.1"
+
+# cxx-qt-lib 会生成并编译大量 C++/Qt 类型。开发构建不需要调试这个第三方
+# 依赖，为它关闭调试符号可显著减少首次编译时间和 target 目录体积，同时
+# 保留 workspace 自身 crate 的完整调试信息。
+[profile.dev.package.cxx-qt-lib]
+debug = 0
