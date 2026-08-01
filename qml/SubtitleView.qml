@@ -44,6 +44,42 @@ Rectangle {
         subtitleEntries = JSON.parse(subtitleBridge.entriesJson)
     }
 
+    function ensureActiveCueVisible() {
+        if (activeTab !== 0 || !subtitleBridge)
+            return
+        var cueIndex = subtitleBridge.activeCueIndex
+        if (cueIndex < 0 || cueIndex >= subtitleList.count)
+            return
+
+        Qt.callLater(function() {
+            if (root.activeTab !== 0 || !root.subtitleBridge
+                    || root.subtitleBridge.activeCueIndex !== cueIndex)
+                return
+            var item = subtitleList.itemAtIndex(cueIndex)
+            if (!item) {
+                subtitleList.positionViewAtIndex(cueIndex, ListView.Contain)
+                Qt.callLater(function() { root.positionCueNearTop(cueIndex) })
+                return
+            }
+
+            var safeTop = subtitleList.contentY + subtitleList.height * 0.18
+            var safeBottom = subtitleList.contentY + subtitleList.height * 0.72
+            if (item.y < safeTop || item.y + item.height > safeBottom)
+                root.positionCueNearTop(cueIndex)
+        })
+    }
+
+    function positionCueNearTop(cueIndex) {
+        if (!subtitleBridge || subtitleBridge.activeCueIndex !== cueIndex)
+            return
+        var item = subtitleList.itemAtIndex(cueIndex)
+        if (!item)
+            return
+        var target = item.y + item.height / 2 - subtitleList.height * 0.35
+        var maximum = Math.max(0, subtitleList.contentHeight - subtitleList.height)
+        subtitleList.contentY = Math.max(0, Math.min(maximum, target))
+    }
+
     function syncSelectionEditor() {
         if (!subtitleBridge)
             return
@@ -99,7 +135,10 @@ Rectangle {
 
         function onEntriesJsonChanged() {
             root.updateSubtitleEntries()
+            root.ensureActiveCueVisible()
         }
+
+        function onActiveCueIndexChanged() { root.ensureActiveCueVisible() }
 
         function onEditingTextChanged() {
             subtitleEditor.text = root.subtitleBridge ? root.subtitleBridge.editingText : ""
@@ -111,6 +150,11 @@ Rectangle {
         context: Qt.ApplicationShortcut
         enabled: subtitleEditor.activeFocus
         onActivated: root.clearEditorFocus()
+    }
+
+    onActiveTabChanged: {
+        if (activeTab === 0)
+            ensureActiveCueVisible()
     }
 
     Connections {
@@ -176,14 +220,82 @@ Rectangle {
             }
         }
 
+        ListView {
+            id: subtitleList
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.activeTab === 0
+            clip: true
+            spacing: 6
+            model: root.subtitleEntries
+
+            delegate: Rectangle {
+                id: subtitleDelegate
+                readonly property bool isPlayingCue: root.subtitleBridge
+                                                     && root.subtitleBridge.activeCueIndex
+                                                        === modelData.index
+                width: ListView.view.width
+                height: subtitleContent.implicitHeight + 18
+                radius: 9
+                color: isPlayingCue ? root.accentBg : "transparent"
+                border.color: isPlayingCue ? root.accent : root.borderColor
+                border.width: isPlayingCue ? 2 : 1
+
+                Rectangle {
+                    visible: parent.isPlayingCue
+                    width: 4
+                    height: Math.max(12, parent.height - 16)
+                    anchors.left: parent.left
+                    anchors.leftMargin: 3
+                    anchors.verticalCenter: parent.verticalCenter
+                    radius: 2
+                    color: root.accent
+                }
+
+                Column {
+                    id: subtitleContent
+                    width: parent.width - 20
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 5
+
+                    Text {
+                        width: parent.width
+                        text: modelData.startTime + " --> " + modelData.endTime
+                        color: root.textSecondary
+                        font.pixelSize: 11
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: modelData.text
+                        color: subtitleDelegate.isPlayingCue ? root.accent : root.textPrimary
+                        wrapMode: Text.Wrap
+                        font.pixelSize: 13
+                        font.bold: subtitleDelegate.isPlayingCue
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (root.subtitleBridge)
+                            root.subtitleBridge.selectCue(modelData.index)
+                        if (root.waveformBridge)
+                            root.waveformBridge.setSelectionRange(modelData.start, modelData.end)
+                    }
+                }
+            }
+        }
+
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 128
             visible: root.activeTab === 0
             radius: 9
             color: root.elevatedBg
-            border.color: root.subtitleBridge && root.subtitleBridge.editingCueIndex >= 0
-                          ? root.accent : root.borderColor
+            border.color: root.borderColor
 
             ColumnLayout {
                 anchors.fill: parent
@@ -241,66 +353,6 @@ Rectangle {
             }
         }
 
-        ListView {
-            id: subtitleList
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            visible: root.activeTab === 0
-            clip: true
-            spacing: 6
-            model: root.subtitleEntries
-
-            delegate: Rectangle {
-                width: ListView.view.width
-                height: subtitleContent.implicitHeight + 18
-                radius: 9
-                color: root.subtitleBridge
-                       && root.subtitleBridge.editingCueIndex === modelData.index
-                       ? root.accentBg
-                       : (root.subtitleBridge
-                          && root.subtitleBridge.activeCueIndex === modelData.index
-                          ? root.elevatedBg : "transparent")
-                border.color: root.subtitleBridge
-                              && root.subtitleBridge.editingCueIndex === modelData.index
-                              ? root.accent : root.borderColor
-                border.width: 1
-
-                Column {
-                    id: subtitleContent
-                    width: parent.width - 20
-                    anchors.left: parent.left
-                    anchors.leftMargin: 10
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 5
-
-                    Text {
-                        width: parent.width
-                        text: modelData.startTime + " --> " + modelData.endTime
-                        color: root.textSecondary
-                        font.pixelSize: 11
-                    }
-
-                    Text {
-                        width: parent.width
-                        text: modelData.text
-                        color: root.textPrimary
-                        wrapMode: Text.Wrap
-                        font.pixelSize: 13
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.subtitleBridge)
-                            root.subtitleBridge.selectCue(modelData.index)
-                        if (root.waveformBridge)
-                            root.waveformBridge.setSelectionRange(modelData.start, modelData.end)
-                    }
-                }
-            }
-        }
-
         Text {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -309,16 +361,6 @@ Rectangle {
             color: root.textSecondary
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-        }
-
-        Text {
-            Layout.fillWidth: true
-            visible: root.subtitleBridge && root.subtitleBridge.statusMessage.length > 0
-            text: root.subtitleBridge ? root.subtitleBridge.statusMessage : ""
-            color: root.textSecondary
-            wrapMode: Text.Wrap
-            font.pixelSize: 11
-            elide: Text.ElideRight
         }
     }
 }

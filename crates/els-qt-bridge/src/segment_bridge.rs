@@ -2,7 +2,7 @@
 
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QList, QString};
 use els_learning_core::LearningManager;
 use std::path::Path;
 
@@ -13,7 +13,9 @@ type SegmentManager =
 pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
+        include!("cxx-qt-lib/core/qlist/qlist_i32.h");
         type QString = cxx_qt_lib::QString;
+        type QList_i32 = cxx_qt_lib::QList<i32>;
     }
 
     extern "RustQt" {
@@ -30,6 +32,9 @@ pub mod qobject {
         #[qproperty(QString, current_video_path, cxx_name = "currentVideoPath")]
         #[qproperty(QString, current_video_title, cxx_name = "currentVideoTitle")]
         #[qproperty(QString, status_message, cxx_name = "statusMessage")]
+        #[qproperty(i32, recent_label_count, cxx_name = "recentLabelCount")]
+        #[qproperty(i32, label_playback_range_count, cxx_name = "labelPlaybackRangeCount")]
+        #[qproperty(QString, label_playback_label, cxx_name = "labelPlaybackLabel")]
         type SegmentBridge = super::SegmentBridgeRust;
 
         #[qinvokable]
@@ -67,6 +72,38 @@ pub mod qobject {
         fn increment_completed_loops(self: Pin<&mut SegmentBridge>) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "setSegmentLabel"]
+        fn set_segment_label(self: Pin<&mut SegmentBridge>, index: i32, label: &QString) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "setSegmentLabels"]
+        fn set_segment_labels(
+            self: Pin<&mut SegmentBridge>,
+            indices: &QList_i32,
+            label: &QString,
+        ) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "recentLabelAt"]
+        fn recent_label_at(self: Pin<&mut SegmentBridge>, index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "buildLabelPlaybackPlan"]
+        fn build_label_playback_plan(self: Pin<&mut SegmentBridge>, index: i32) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "labelPlaybackRangeStartAt"]
+        fn label_playback_range_start_at(self: Pin<&mut SegmentBridge>, index: i32) -> f64;
+
+        #[qinvokable]
+        #[cxx_name = "labelPlaybackRangeEndAt"]
+        fn label_playback_range_end_at(self: Pin<&mut SegmentBridge>, index: i32) -> f64;
+
+        #[qinvokable]
+        #[cxx_name = "recordLabelPlaybackLoop"]
+        fn record_label_playback_loop(self: Pin<&mut SegmentBridge>) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "segmentStartAt"]
         fn segment_start_at(self: Pin<&mut SegmentBridge>, index: i32) -> f64;
 
@@ -85,6 +122,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "segmentCompletedLoopsAt"]
         fn segment_completed_loops_at(self: Pin<&mut SegmentBridge>, index: i32) -> i32;
+
+        #[qinvokable]
+        #[cxx_name = "segmentLabelAt"]
+        fn segment_label_at(self: Pin<&mut SegmentBridge>, index: i32) -> QString;
     }
 }
 
@@ -100,9 +141,14 @@ pub struct SegmentBridgeRust {
     current_video_path: QString,
     current_video_title: QString,
     status_message: QString,
+    recent_label_count: i32,
+    label_playback_range_count: i32,
+    label_playback_label: QString,
     manager: SegmentManager,
     current_video_id: Option<i64>,
     segments: Vec<els_learning_core::Segment>,
+    recent_labels: Vec<String>,
+    label_playback_plan: Option<els_learning_core::LabelPlaybackPlan>,
 }
 
 impl Default for SegmentBridgeRust {
@@ -119,9 +165,14 @@ impl Default for SegmentBridgeRust {
             current_video_path: QString::from(""),
             current_video_title: QString::from(""),
             status_message: QString::from("尚未加载视频片段"),
+            recent_label_count: 0,
+            label_playback_range_count: 0,
+            label_playback_label: QString::from(""),
             manager: SegmentManager::new(els_storage::SqliteSegmentRepository::default()),
             current_video_id: None,
             segments: Vec::new(),
+            recent_labels: Vec::new(),
+            label_playback_plan: None,
         }
     }
 }
@@ -132,8 +183,11 @@ impl qobject::SegmentBridge {
         if path.trim().is_empty() {
             self.as_mut().rust_mut().current_video_id = None;
             self.as_mut().rust_mut().segments.clear();
+            self.as_mut().rust_mut().recent_labels.clear();
             self.as_mut().set_segment_count(0);
+            self.as_mut().set_recent_label_count(0);
             self.as_mut().clear_active_segment();
+            self.as_mut().clear_label_playback_plan();
             return false;
         }
 
@@ -156,13 +210,19 @@ impl qobject::SegmentBridge {
             Ok(segments) => segments,
             Err(err) => return self.as_mut().report_error("读取片段失败", err),
         };
+        let recent_labels = match self.rust().manager.list_recent_labels(video_id, 10) {
+            Ok(labels) => labels,
+            Err(err) => return self.as_mut().report_error("读取最近标记失败", err),
+        };
 
         self.as_mut().rust_mut().current_video_id = Some(video_id);
         self.as_mut().rust_mut().segments = segments;
+        self.as_mut().rust_mut().recent_labels = recent_labels;
         self.as_mut().set_current_video_path(QString::from(&path));
         self.as_mut().set_current_video_title(QString::from(&title));
         self.as_mut().refresh_list_properties();
         self.as_mut().clear_active_segment();
+        self.as_mut().clear_label_playback_plan();
         self.as_mut()
             .set_status_message(QString::from("学习片段已加载"));
         true
@@ -206,6 +266,10 @@ impl qobject::SegmentBridge {
                 .as_ref()
                 .map(|segment| segment.completed_loops)
                 .unwrap_or(0),
+            label: matching_segment
+                .as_ref()
+                .map(|segment| segment.label.clone())
+                .unwrap_or_default(),
         };
         let saved_id = match self.as_mut().rust_mut().manager.add_segment(segment) {
             Ok(id) => id,
@@ -316,6 +380,158 @@ impl qobject::SegmentBridge {
         true
     }
 
+    fn set_segment_label(mut self: Pin<&mut Self>, index: i32, label: &QString) -> bool {
+        let index = index.max(0) as usize;
+        let segment_id = match self
+            .rust()
+            .segments
+            .get(index)
+            .and_then(|segment| segment.id)
+        {
+            Some(id) => id,
+            None => return false,
+        };
+        let video_id = match self.rust().current_video_id {
+            Some(id) => id,
+            None => return false,
+        };
+        if let Err(err) = self.as_mut().rust_mut().manager.set_segment_label(
+            segment_id,
+            video_id,
+            &label.to_string(),
+        ) {
+            return self.as_mut().report_error("更新片段标记失败", err);
+        }
+        if !self.as_mut().reload_segments() {
+            return false;
+        }
+        if !self.as_mut().reload_recent_labels() {
+            return false;
+        }
+        self.as_mut()
+            .set_status_message(QString::from("片段标记已更新"));
+        true
+    }
+
+    fn set_segment_labels(mut self: Pin<&mut Self>, indices: &QList<i32>, label: &QString) -> bool {
+        if indices.is_empty() {
+            return false;
+        }
+        let mut segment_ids = Vec::with_capacity(indices.len().max(0) as usize);
+        for index in indices.iter().copied() {
+            let Some(segment_id) = self
+                .rust()
+                .segments
+                .get(index.max(0) as usize)
+                .and_then(|segment| segment.id)
+            else {
+                return false;
+            };
+            segment_ids.push(segment_id);
+        }
+        let video_id = match self.rust().current_video_id {
+            Some(id) => id,
+            None => return false,
+        };
+        if let Err(err) = self.as_mut().rust_mut().manager.set_segment_labels(
+            &segment_ids,
+            video_id,
+            &label.to_string(),
+        ) {
+            return self.as_mut().report_error("批量更新片段标记失败", err);
+        }
+        if !self.as_mut().reload_segments() {
+            return false;
+        }
+        if !self.as_mut().reload_recent_labels() {
+            return false;
+        }
+        self.as_mut().set_status_message(QString::from(&format!(
+            "已更新 {} 个片段的标记",
+            segment_ids.len()
+        )));
+        true
+    }
+
+    fn recent_label_at(self: Pin<&mut Self>, index: i32) -> QString {
+        self.rust()
+            .recent_labels
+            .get(index.max(0) as usize)
+            .map(|label| QString::from(label))
+            .unwrap_or_else(|| QString::from(""))
+    }
+
+    fn build_label_playback_plan(mut self: Pin<&mut Self>, index: i32) -> bool {
+        let Some(segment) = self.rust().segments.get(index.max(0) as usize) else {
+            return false;
+        };
+        let Some(plan) =
+            els_learning_core::build_label_playback_plan(&self.rust().segments, &segment.label)
+        else {
+            self.as_mut().clear_label_playback_plan();
+            return false;
+        };
+        let range_count = plan.ranges.len() as i32;
+        let label = plan.label.clone();
+        self.as_mut().rust_mut().label_playback_plan = Some(plan);
+        self.as_mut().set_label_playback_range_count(range_count);
+        self.as_mut()
+            .set_label_playback_label(QString::from(&label));
+        true
+    }
+
+    fn label_playback_range_start_at(self: Pin<&mut Self>, index: i32) -> f64 {
+        self.rust()
+            .label_playback_plan
+            .as_ref()
+            .and_then(|plan| plan.ranges.get(index.max(0) as usize))
+            .map(|range| range.start)
+            .unwrap_or(0.0)
+    }
+
+    fn label_playback_range_end_at(self: Pin<&mut Self>, index: i32) -> f64 {
+        self.rust()
+            .label_playback_plan
+            .as_ref()
+            .and_then(|plan| plan.ranges.get(index.max(0) as usize))
+            .map(|range| range.end)
+            .unwrap_or(0.0)
+    }
+
+    fn record_label_playback_loop(mut self: Pin<&mut Self>) -> bool {
+        let segment_ids = match self.rust().label_playback_plan.as_ref() {
+            Some(plan) => plan.member_segment_ids.clone(),
+            None => return false,
+        };
+        if let Err(err) = self
+            .as_mut()
+            .rust_mut()
+            .manager
+            .record_completed_loops(&segment_ids)
+        {
+            return self.as_mut().report_error("保存标记播放进度失败", err);
+        }
+        let active_id = self
+            .rust()
+            .segments
+            .get(self.rust().active_index.max(0) as usize)
+            .and_then(|segment| segment.id);
+        if !self.as_mut().reload_segments() {
+            return false;
+        }
+        if let Some(active_id) = active_id {
+            if let Some(active_index) = self
+                .rust()
+                .segments
+                .iter()
+                .position(|segment| segment.id == Some(active_id))
+            {
+                self.as_mut().activate_segment(active_index as i32);
+            }
+        }
+        true
+    }
+
     fn segment_start_at(self: Pin<&mut Self>, index: i32) -> f64 {
         self.rust()
             .segments
@@ -356,6 +572,14 @@ impl qobject::SegmentBridge {
             .unwrap_or(0)
     }
 
+    fn segment_label_at(self: Pin<&mut Self>, index: i32) -> QString {
+        self.rust()
+            .segments
+            .get(index.max(0) as usize)
+            .map(|segment| QString::from(&segment.label))
+            .unwrap_or_else(|| QString::from(""))
+    }
+
     fn reload_segments(mut self: Pin<&mut Self>) -> bool {
         let video_id = match self.rust().current_video_id {
             Some(video_id) => video_id,
@@ -370,9 +594,27 @@ impl qobject::SegmentBridge {
         true
     }
 
+    fn reload_recent_labels(mut self: Pin<&mut Self>) -> bool {
+        let video_id = match self.rust().current_video_id {
+            Some(video_id) => video_id,
+            None => return false,
+        };
+        let labels = match self.rust().manager.list_recent_labels(video_id, 10) {
+            Ok(labels) => labels,
+            Err(err) => return self.as_mut().report_error("刷新最近标记失败", err),
+        };
+        let label_count = labels.len() as i32;
+        self.as_mut().rust_mut().recent_labels = labels;
+        self.as_mut().set_recent_label_count(label_count);
+        self.as_mut().bump_revision();
+        true
+    }
+
     fn refresh_list_properties(mut self: Pin<&mut Self>) {
         let segment_count = self.rust().segments.len() as i32;
+        let recent_label_count = self.rust().recent_labels.len() as i32;
         self.as_mut().set_segment_count(segment_count);
+        self.as_mut().set_recent_label_count(recent_label_count);
         self.as_mut().bump_revision();
     }
 
@@ -383,6 +625,12 @@ impl qobject::SegmentBridge {
         self.as_mut().set_active_repeat_count(0);
         self.as_mut().set_active_interval_seconds(0);
         self.as_mut().set_active_completed_loops(0);
+    }
+
+    fn clear_label_playback_plan(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().label_playback_plan = None;
+        self.as_mut().set_label_playback_range_count(0);
+        self.as_mut().set_label_playback_label(QString::from(""));
     }
 
     fn bump_revision(mut self: Pin<&mut Self>) {

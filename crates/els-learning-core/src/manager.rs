@@ -58,7 +58,42 @@ impl<R: crate::SegmentRepository> crate::LearningManager for DefaultLearningMana
         self.repository.delete(segment_id)
     }
 
+    fn set_segment_label(
+        &mut self,
+        segment_id: i64,
+        video_id: i64,
+        label: &str,
+    ) -> els_types::AppResult<()> {
+        self.set_segment_labels(&[segment_id], video_id, label)
+    }
+
+    fn set_segment_labels(
+        &mut self,
+        segment_ids: &[i64],
+        video_id: i64,
+        label: &str,
+    ) -> els_types::AppResult<()> {
+        if segment_ids.is_empty() {
+            return Err(els_types::AppError::InvalidArgument(
+                "at least one segment is required".to_string(),
+            ));
+        }
+        let mut segment_ids = segment_ids.to_vec();
+        segment_ids.sort_unstable();
+        segment_ids.dedup();
+        let label = label.trim().chars().take(80).collect::<String>();
+        self.repository.set_labels(&segment_ids, video_id, &label)
+    }
+
+    fn list_recent_labels(&self, video_id: i64, limit: usize) -> els_types::AppResult<Vec<String>> {
+        self.repository.find_recent_labels(video_id, limit)
+    }
+
     fn record_completed_loop(&mut self, segment_id: i64) -> els_types::AppResult<Progress> {
         self.repository.increment_completed_loops(segment_id)
+    }
+
+    fn record_completed_loops(&mut self, segment_ids: &[i64]) -> els_types::AppResult<()> {
+        self.repository.increment_completed_loops_many(segment_ids)
     }
 }

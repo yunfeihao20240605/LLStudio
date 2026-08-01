@@ -142,10 +142,19 @@ Rectangle {
             waveformCanvas.requestPaint()
     }
 
+    function scheduleDetailRequest() {
+        if (zoomFactor >= 200 && waveformBridge)
+            detailRequestTimer.restart()
+    }
+
     onAccentChanged: requestWaveformPaint()
     onElevatedBgChanged: requestWaveformPaint()
     onBorderColorChanged: requestWaveformPaint()
     onWaveformDisplayGainChanged: requestWaveformPaint()
+    onZoomFactorChanged: {
+        requestWaveformPaint()
+        scheduleDetailRequest()
+    }
 
     radius: 16
     color: panelBg
@@ -155,10 +164,20 @@ Rectangle {
     Timer {
         interval: 80
         repeat: true
-        running: waveformBridge && waveformBridge.isLoading
+        running: waveformBridge && (waveformBridge.isLoading || waveformBridge.isDetailLoading)
         onTriggered: {
             if (waveformBridge)
                 waveformBridge.pollBackgroundTask()
+        }
+    }
+
+    Timer {
+        id: detailRequestTimer
+        interval: 100
+        repeat: false
+        onTriggered: {
+            if (waveformBridge && root.zoomFactor >= 200)
+                waveformBridge.requestDetailRange(root.visibleStart(), root.visibleEnd(), root.zoomFactor)
         }
     }
 
@@ -174,6 +193,10 @@ Rectangle {
             root.requestWaveformPaint()
         }
 
+        function onDetailRevisionChanged() {
+            root.requestWaveformPaint()
+        }
+
         function onSelectionStartChanged() {
             root.requestWaveformPaint()
         }
@@ -184,6 +207,7 @@ Rectangle {
 
         function onDurationSecsChanged() {
             root.resetViewport()
+            root.scheduleDetailRequest()
         }
     }
 
@@ -302,7 +326,11 @@ Rectangle {
                 boundsBehavior: Flickable.StopAtBounds
 
                 onMovementStarted: root.followPlayback = false
-                onContentXChanged: root.requestWaveformPaint()
+                onContentXChanged: {
+                    root.requestWaveformPaint()
+                    root.scheduleDetailRequest()
+                }
+                onWidthChanged: root.scheduleDetailRequest()
 
                 ScrollBar.horizontal: ScrollBar {
                     id: waveformScrollBar
@@ -380,23 +408,33 @@ Rectangle {
                             if (!waveformBridge || waveformBridge.totalBinCount <= 0 || width <= 0)
                                 return
 
-                            var revision = waveformBridge.peakRevision
-                            var peaks = waveformBridge.peakValues
-                            var totalBins = waveformBridge.totalBinCount
-                            if (!peaks || peaks.length < totalBins * 2)
-                                return
-
                             var duration = root.durationSecs()
                             var rangeStart = root.visibleStart()
                             var rangeEnd = root.visibleEnd()
                             var visibleDuration = Math.max(0.001, rangeEnd - rangeStart)
-                            var firstBin = Math.max(0, Math.floor((rangeStart / duration) * totalBins))
-                            var lastBin = Math.min(totalBins, Math.ceil((rangeEnd / duration) * totalBins))
+                            var detailPeaks = waveformBridge.detailPeakValues
+                            var useDetail = root.zoomFactor >= 200
+                                    && detailPeaks && detailPeaks.length > 0
+                                    && waveformBridge.detailStart <= rangeStart + 0.0001
+                                    && waveformBridge.detailEnd >= rangeEnd - 0.0001
+                            var revision = useDetail ? waveformBridge.detailRevision
+                                                     : waveformBridge.peakRevision
+                            var peaks = useDetail ? detailPeaks : waveformBridge.peakValues
+                            var totalBins = useDetail ? Math.floor(detailPeaks.length / 2)
+                                                      : waveformBridge.totalBinCount
+                            var dataStart = useDetail ? waveformBridge.detailStart : 0
+                            var secondsPerBin = useDetail ? waveformBridge.detailBinDuration
+                                                          : duration / Math.max(1, totalBins)
+                            if (!peaks || peaks.length < totalBins * 2 || secondsPerBin <= 0)
+                                return
+
+                            var firstBin = Math.max(0, Math.floor((rangeStart - dataStart) / secondsPerBin))
+                            var lastBin = Math.min(totalBins, Math.ceil((rangeEnd - dataStart) / secondsPerBin))
                             var visibleBins = Math.max(1, lastBin - firstBin)
                             var binsPerPixel = visibleBins / Math.max(1, width)
                             var centerY = height / 2
                             var amplitudeHeight = Math.max(1, height - 92) * 0.5
-                            var loadedCount = waveformBridge.loadedBinCount
+                            var loadedCount = useDetail ? totalBins : waveformBridge.loadedBinCount
                             var selectionVisible = showSelectionCheckBox.checked
                                     && root.selectionIsValid()
                             var unloadedColor = Qt.rgba(0.81, 0.83, 0.86, 0.35)
@@ -404,7 +442,7 @@ Rectangle {
                             function barColor(binStart, binEnd) {
                                 if (binEnd > loadedCount)
                                     return unloadedColor
-                                var sampleTime = duration * (((binStart + binEnd) * 0.5) / totalBins)
+                                var sampleTime = dataStart + ((binStart + binEnd) * 0.5) * secondsPerBin
                                 return selectionVisible && sampleTime >= root.selectionStart()
                                         && sampleTime <= root.selectionEnd()
                                         ? root.accent : root.waveformColor
@@ -435,14 +473,18 @@ Rectangle {
                                         minAmplitude = Math.min(minAmplitude, peaks[bin * 2])
                                         maxAmplitude = Math.max(maxAmplitude, peaks[bin * 2 + 1])
                                     }
-                                    drawBar(pixel, 1, minAmplitude, maxAmplitude,
+                                    var pixelX = ((dataStart + binStart * secondsPerBin - rangeStart)
+                                                  / visibleDuration) * width
+                                    drawBar(pixelX, Math.max(1, (binEnd - binStart) * secondsPerBin
+                                                               / visibleDuration * width), minAmplitude, maxAmplitude,
                                             barColor(binStart, binEnd))
                                 }
                             } else {
-                                var pixelsPerBin = width / visibleBins
+                                var pixelsPerBin = secondsPerBin / visibleDuration * width
                                 var barWidth = Math.max(1, Math.min(6, pixelsPerBin * 0.72))
                                 for (var index = firstBin; index < lastBin; ++index) {
-                                    var localX = ((index - firstBin) / visibleBins) * width
+                                    var localX = ((dataStart + index * secondsPerBin - rangeStart)
+                                                  / visibleDuration) * width
                                             + (pixelsPerBin - barWidth) * 0.5
                                     drawBar(localX, barWidth, peaks[index * 2], peaks[index * 2 + 1],
                                             barColor(index, index + 1))

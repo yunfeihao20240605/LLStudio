@@ -5,6 +5,7 @@ fn main() {
         QmlModule::new("com.yfhao.els.app")
             .qml_file("../../qml/Main.qml")
             .qml_file("../../qml/LibrarySidebar.qml")
+            .qml_file("../../qml/CompletedVideoList.qml")
             .qml_file("../../qml/VideoPlaybackPane.qml")
             .qml_file("../../qml/WaveformView.qml")
             .qml_file("../../qml/ControlPanel.qml")

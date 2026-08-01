@@ -125,17 +125,15 @@ impl qobject::SubtitleBridge {
         self.as_mut().rust_mut().playback_position = 0.0;
         self.as_mut().set_has_video(save_path.is_some());
 
-        let status = match (source_path, save_path) {
-            (Some(source), Some(target)) if source != target => format!(
-                "已加载 {}，编辑内容将保存为 {}",
-                source.to_string_lossy(),
-                target.to_string_lossy()
-            ),
-            (Some(source), _) => format!("已加载字幕：{}", source.to_string_lossy()),
-            (None, Some(target)) => {
-                format!("当前视频暂无字幕，将保存到 {}", target.to_string_lossy())
+        let status = if source_path.is_some() {
+            String::new()
+        } else {
+            match save_path {
+                Some(target) => {
+                    format!("当前视频暂无字幕，将保存到 {}", target.to_string_lossy())
+                }
+                None => "无法确定字幕保存路径".to_string(),
             }
-            (None, None) => "无法确定字幕保存路径".to_string(),
         };
         self.as_mut().sync_track_state(&status);
         true

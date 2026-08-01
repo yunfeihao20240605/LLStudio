@@ -22,6 +22,7 @@ pub struct Segment {
     pub repeat_count: u32,
     pub interval_seconds: u32,
     pub completed_loops: u32,
+    pub label: String,
 }
 
 /// 跨 crate 统一的错误类型占位。真正实现阶段可替换为 `thiserror` 派生。

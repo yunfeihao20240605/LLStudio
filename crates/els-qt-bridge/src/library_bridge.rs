@@ -18,6 +18,13 @@ pub mod qobject {
         #[qproperty(i32, in_progress_count, cxx_name = "inProgressCount")]
         #[qproperty(i32, ungrouped_video_count, cxx_name = "ungroupedVideoCount")]
         #[qproperty(i32, list_count, cxx_name = "listCount")]
+        #[qproperty(i32, completed_count, cxx_name = "completedCount")]
+        #[qproperty(
+            i32,
+            completed_ungrouped_video_count,
+            cxx_name = "completedUngroupedVideoCount"
+        )]
+        #[qproperty(i32, completed_list_count, cxx_name = "completedListCount")]
         #[qproperty(i32, revision)]
         #[qproperty(QString, status_message, cxx_name = "statusMessage")]
         type LibraryBridge = super::LibraryBridgeRust;
@@ -67,6 +74,14 @@ pub mod qobject {
         fn remove_video(self: Pin<&mut LibraryBridge>, path: &QString) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "markVideoCompleted"]
+        fn mark_video_completed(self: Pin<&mut LibraryBridge>, path: &QString) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "restoreCompletedVideo"]
+        fn restore_completed_video(self: Pin<&mut LibraryBridge>, path: &QString) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "listNameAt"]
         fn list_name_at(&self, list_index: i32) -> QString;
 
@@ -89,6 +104,30 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "ungroupedVideoPathAt"]
         fn ungrouped_video_path_at(&self, video_index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "completedListNameAt"]
+        fn completed_list_name_at(&self, list_index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "completedListVideoCountAt"]
+        fn completed_list_video_count_at(&self, list_index: i32) -> i32;
+
+        #[qinvokable]
+        #[cxx_name = "completedListVideoTitleAt"]
+        fn completed_list_video_title_at(&self, list_index: i32, video_index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "completedListVideoPathAt"]
+        fn completed_list_video_path_at(&self, list_index: i32, video_index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "completedUngroupedVideoTitleAt"]
+        fn completed_ungrouped_video_title_at(&self, video_index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "completedUngroupedVideoPathAt"]
+        fn completed_ungrouped_video_path_at(&self, video_index: i32) -> QString;
     }
 }
 
@@ -96,11 +135,16 @@ pub struct LibraryBridgeRust {
     in_progress_count: i32,
     ungrouped_video_count: i32,
     list_count: i32,
+    completed_count: i32,
+    completed_ungrouped_video_count: i32,
+    completed_list_count: i32,
     revision: i32,
     status_message: QString,
     repository: els_storage::VideoLibraryRepository,
     videos: Vec<els_storage::LearningVideo>,
     lists: Vec<els_storage::VideoList>,
+    completed_videos: Vec<els_storage::LearningVideo>,
+    completed_lists: Vec<els_storage::VideoList>,
 }
 
 impl Default for LibraryBridgeRust {
@@ -114,25 +158,46 @@ impl Default for LibraryBridgeRust {
                     in_progress_count: 0,
                     ungrouped_video_count: 0,
                     list_count: 0,
+                    completed_count: 0,
+                    completed_ungrouped_video_count: 0,
+                    completed_list_count: 0,
                     revision: 1,
                     status_message: QString::from(&message),
                     repository: els_storage::VideoLibraryRepository::disabled(),
                     videos: Vec::new(),
                     lists: Vec::new(),
+                    completed_videos: Vec::new(),
+                    completed_lists: Vec::new(),
                 };
             }
         };
-        let (videos, lists, status_message) =
-            match (repository.list_in_progress(), repository.list_video_lists()) {
-                (Ok(videos), Ok(lists)) => (videos, lists, QString::from("学习库已加载")),
-                (Err(err), _) | (_, Err(err)) => {
+        let (videos, lists, completed_videos, completed_lists, status_message) =
+            match load_library(&repository) {
+                Ok((videos, lists, completed_videos, completed_lists)) => (
+                    videos,
+                    lists,
+                    completed_videos,
+                    completed_lists,
+                    QString::from("学习库已加载"),
+                ),
+                Err(err) => {
                     let message = format!("读取学习库失败：{err}");
                     eprintln!("{message}");
-                    (Vec::new(), Vec::new(), QString::from(&message))
+                    (
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        QString::from(&message),
+                    )
                 }
             };
 
         let ungrouped_count = videos
+            .iter()
+            .filter(|video| video.list_id.is_none())
+            .count();
+        let completed_ungrouped_count = completed_videos
             .iter()
             .filter(|video| video.list_id.is_none())
             .count();
@@ -141,11 +206,17 @@ impl Default for LibraryBridgeRust {
             in_progress_count: videos.len().min(i32::MAX as usize) as i32,
             ungrouped_video_count: ungrouped_count.min(i32::MAX as usize) as i32,
             list_count: lists.len().min(i32::MAX as usize) as i32,
+            completed_count: completed_videos.len().min(i32::MAX as usize) as i32,
+            completed_ungrouped_video_count: completed_ungrouped_count.min(i32::MAX as usize)
+                as i32,
+            completed_list_count: completed_lists.len().min(i32::MAX as usize) as i32,
             revision: 1,
             status_message,
             repository,
             videos,
             lists,
+            completed_videos,
+            completed_lists,
         }
     }
 }
@@ -179,18 +250,16 @@ impl qobject::LibraryBridge {
     }
 
     fn refresh(mut self: Pin<&mut Self>) -> bool {
-        let (videos, lists) = match (
-            self.rust().repository.list_in_progress(),
-            self.rust().repository.list_video_lists(),
-        ) {
-            (Ok(videos), Ok(lists)) => (videos, lists),
-            (Err(err), _) | (_, Err(err)) => {
-                let message = format!("刷新学习库失败：{err}");
-                eprintln!("{message}");
-                self.as_mut().set_status_message(QString::from(&message));
-                return false;
-            }
-        };
+        let (videos, lists, completed_videos, completed_lists) =
+            match load_library(&self.rust().repository) {
+                Ok(library) => library,
+                Err(err) => {
+                    let message = format!("刷新学习库失败：{err}");
+                    eprintln!("{message}");
+                    self.as_mut().set_status_message(QString::from(&message));
+                    return false;
+                }
+            };
         let count = videos.len().min(i32::MAX as usize) as i32;
         let ungrouped_count = videos
             .iter()
@@ -198,11 +267,24 @@ impl qobject::LibraryBridge {
             .count()
             .min(i32::MAX as usize) as i32;
         let list_count = lists.len().min(i32::MAX as usize) as i32;
+        let completed_count = completed_videos.len().min(i32::MAX as usize) as i32;
+        let completed_ungrouped_count = completed_videos
+            .iter()
+            .filter(|video| video.list_id.is_none())
+            .count()
+            .min(i32::MAX as usize) as i32;
+        let completed_list_count = completed_lists.len().min(i32::MAX as usize) as i32;
         self.as_mut().rust_mut().videos = videos;
         self.as_mut().rust_mut().lists = lists;
+        self.as_mut().rust_mut().completed_videos = completed_videos;
+        self.as_mut().rust_mut().completed_lists = completed_lists;
         self.as_mut().set_in_progress_count(count);
         self.as_mut().set_ungrouped_video_count(ungrouped_count);
         self.as_mut().set_list_count(list_count);
+        self.as_mut().set_completed_count(completed_count);
+        self.as_mut()
+            .set_completed_ungrouped_video_count(completed_ungrouped_count);
+        self.as_mut().set_completed_list_count(completed_list_count);
         let revision = self.rust().revision.wrapping_add(1).max(1);
         self.as_mut().set_revision(revision);
         self.as_mut()
@@ -298,6 +380,30 @@ impl qobject::LibraryBridge {
         self.as_mut().refresh()
     }
 
+    fn mark_video_completed(mut self: Pin<&mut Self>, path: &QString) -> bool {
+        let result = self
+            .as_mut()
+            .rust_mut()
+            .repository
+            .mark_completed(&path.to_string());
+        if let Err(err) = result {
+            return self.as_mut().report_error("标记视频已完成失败", err);
+        }
+        self.as_mut().refresh()
+    }
+
+    fn restore_completed_video(mut self: Pin<&mut Self>, path: &QString) -> bool {
+        let result = self
+            .as_mut()
+            .rust_mut()
+            .repository
+            .restore_to_learning(&path.to_string());
+        if let Err(err) = result {
+            return self.as_mut().report_error("移回正在学习失败", err);
+        }
+        self.as_mut().refresh()
+    }
+
     fn list_name_at(&self, list_index: i32) -> QString {
         self.rust()
             .lists
@@ -343,6 +449,51 @@ impl qobject::LibraryBridge {
             .unwrap_or_else(|| QString::from(""))
     }
 
+    fn completed_list_name_at(&self, list_index: i32) -> QString {
+        self.rust()
+            .completed_lists
+            .get(list_index.max(0) as usize)
+            .map(|list| QString::from(&list.name))
+            .unwrap_or_else(|| QString::from(""))
+    }
+
+    fn completed_list_video_count_at(&self, list_index: i32) -> i32 {
+        let list_id = match self.rust().completed_lists.get(list_index.max(0) as usize) {
+            Some(list) => list.id,
+            None => return 0,
+        };
+        self.rust()
+            .completed_videos
+            .iter()
+            .filter(|video| video.list_id == Some(list_id))
+            .count()
+            .min(i32::MAX as usize) as i32
+    }
+
+    fn completed_list_video_title_at(&self, list_index: i32, video_index: i32) -> QString {
+        self.completed_grouped_video_at(list_index, video_index)
+            .map(|video| QString::from(&video.title))
+            .unwrap_or_else(|| QString::from(""))
+    }
+
+    fn completed_list_video_path_at(&self, list_index: i32, video_index: i32) -> QString {
+        self.completed_grouped_video_at(list_index, video_index)
+            .map(|video| QString::from(&video.path))
+            .unwrap_or_else(|| QString::from(""))
+    }
+
+    fn completed_ungrouped_video_title_at(&self, video_index: i32) -> QString {
+        self.completed_ungrouped_video_at(video_index)
+            .map(|video| QString::from(&video.title))
+            .unwrap_or_else(|| QString::from(""))
+    }
+
+    fn completed_ungrouped_video_path_at(&self, video_index: i32) -> QString {
+        self.completed_ungrouped_video_at(video_index)
+            .map(|video| QString::from(&video.path))
+            .unwrap_or_else(|| QString::from(""))
+    }
+
     fn grouped_video_at(
         &self,
         list_index: i32,
@@ -364,10 +515,56 @@ impl qobject::LibraryBridge {
             .nth(video_index.max(0) as usize)
     }
 
+    fn completed_grouped_video_at(
+        &self,
+        list_index: i32,
+        video_index: i32,
+    ) -> Option<&els_storage::LearningVideo> {
+        let list_id = self
+            .rust()
+            .completed_lists
+            .get(list_index.max(0) as usize)?
+            .id;
+        self.rust()
+            .completed_videos
+            .iter()
+            .filter(|video| video.list_id == Some(list_id))
+            .nth(video_index.max(0) as usize)
+    }
+
+    fn completed_ungrouped_video_at(
+        &self,
+        video_index: i32,
+    ) -> Option<&els_storage::LearningVideo> {
+        self.rust()
+            .completed_videos
+            .iter()
+            .filter(|video| video.list_id.is_none())
+            .nth(video_index.max(0) as usize)
+    }
+
     fn report_error(mut self: Pin<&mut Self>, context: &str, error: els_types::AppError) -> bool {
         let message = format!("{context}：{error}");
         eprintln!("{message}");
         self.as_mut().set_status_message(QString::from(&message));
         false
     }
+}
+
+type LibraryData = (
+    Vec<els_storage::LearningVideo>,
+    Vec<els_storage::VideoList>,
+    Vec<els_storage::LearningVideo>,
+    Vec<els_storage::VideoList>,
+);
+
+fn load_library(
+    repository: &els_storage::VideoLibraryRepository,
+) -> els_types::AppResult<LibraryData> {
+    Ok((
+        repository.list_in_progress()?,
+        repository.list_video_lists()?,
+        repository.list_completed()?,
+        repository.list_completed_video_lists()?,
+    ))
 }

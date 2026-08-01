@@ -17,6 +17,8 @@ Rectangle {
     property int selectedLibraryIndex: 0
     property string selectedVideoPath: ""
     property bool learningExpanded: true
+    property bool completedExpanded: false
+    property int libraryChildIndent: 16
     property bool selectionAvailable: false
     property real selectionStart: 0
     property real selectionEnd: 0
@@ -55,6 +57,24 @@ Rectangle {
         return deleteVideo(selectedVideoPath)
     }
 
+    function markVideoCompleted(videoPath) {
+        if (!libraryBridge || !videoPath || videoPath.length === 0)
+            return false
+        if (!libraryBridge.markVideoCompleted(videoPath))
+            return false
+        completedExpanded = true
+        return true
+    }
+
+    function restoreCompletedVideo(videoPath) {
+        if (!libraryBridge || !videoPath || videoPath.length === 0)
+            return false
+        if (!libraryBridge.restoreCompletedVideo(videoPath))
+            return false
+        revealLearningVideos()
+        return true
+    }
+
     function formatSeconds(totalSeconds) {
         var safe = Math.max(0, Math.floor(totalSeconds || 0))
         var minutes = Math.floor(safe / 60)
@@ -63,10 +83,8 @@ Rectangle {
     }
 
     property var libraryItems: [
-        { label: "正在学习", count: 0, icon: "◉" },
-        { label: "已完成", count: 12, icon: "✓" },
-        { label: "收藏夹", count: 5, icon: "☆" },
-        { label: "回收站", count: 3, icon: "⌫" }
+        { label: "正在学习", icon: "◉" },
+        { label: "已完成", icon: "✓" }
     ]
 
     radius: 16
@@ -157,13 +175,19 @@ Rectangle {
                             delegate: Item {
                                 property int categoryIndex: index
                                 property bool isLearningCategory: categoryIndex === 0
+                                property bool isCompletedCategory: categoryIndex === 1
                                 property bool showLearningVideos: isLearningCategory
                                                                           && root.learningExpanded
+                                property bool showCompletedVideos: isCompletedCategory
+                                                                           && root.completedExpanded
 
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: categoryHeader.height
                                                         + (showLearningVideos
-                                                           ? learningVideoList.implicitHeight + 4 : 0)
+                                                           ? learningVideoList.implicitHeight + 4
+                                                           : (showCompletedVideos
+                                                              ? completedVideoList.implicitHeight + 4
+                                                              : 0))
 
                                 Rectangle {
                                     id: categoryHeader
@@ -208,7 +232,8 @@ Rectangle {
                                                 anchors.centerIn: parent
                                                 text: isLearningCategory && root.libraryBridge
                                                       ? root.libraryBridge.inProgressCount
-                                                      : modelData.count
+                                                      : (root.libraryBridge
+                                                         ? root.libraryBridge.completedCount : 0)
                                                 color: categoryIndex === root.selectedLibraryIndex
                                                        ? "#ffffff" : textSecondary
                                                 font.pixelSize: 12
@@ -216,8 +241,9 @@ Rectangle {
                                         }
 
                                         Text {
-                                            visible: isLearningCategory
-                                            text: root.learningExpanded ? "⌃" : "⌄"
+                                            text: (isLearningCategory
+                                                   ? root.learningExpanded
+                                                   : root.completedExpanded) ? "⌃" : "⌄"
                                             color: categoryIndex === root.selectedLibraryIndex
                                                    ? accent : textSecondary
                                             font.pixelSize: 13
@@ -235,12 +261,15 @@ Rectangle {
                                                 root.selectedLibraryIndex = categoryIndex
                                                 if (isLearningCategory)
                                                     root.learningExpanded = !root.learningExpanded
+                                                else if (isCompletedCategory)
+                                                    root.completedExpanded = !root.completedExpanded
                                             }
                                         }
                                     }
 
                                     DropArea {
                                         anchors.fill: parent
+                                        enabled: isLearningCategory
                                         keys: ["learning-video"]
                                         onDropped: function(drop) {
                                             if (root.libraryBridge && drop.source
@@ -257,7 +286,7 @@ Rectangle {
                                     anchors.top: categoryHeader.bottom
                                     anchors.topMargin: 4
                                     anchors.left: parent.left
-                                    anchors.leftMargin: 20
+                                    anchors.leftMargin: root.libraryChildIndent
                                     anchors.right: parent.right
                                     spacing: 4
 
@@ -380,22 +409,40 @@ Rectangle {
 
                                             Menu {
                                                 id: directVideoMenu
-                                                title: "移动到"
 
-                                                Repeater {
-                                                    model: root.libraryBridge
-                                                           ? root.libraryBridge.listCount : 0
+                                                MenuItem {
+                                                    text: "标记为已完成"
+                                                    onTriggered: root.markVideoCompleted(
+                                                                     directVideoDelegate.videoPath)
+                                                }
 
-                                                    delegate: MenuItem {
-                                                        property int targetListIndex: index
-                                                        text: {
-                                                            root.libraryBridge.revision
-                                                            return root.libraryBridge.listNameAt(
-                                                                        targetListIndex)
+                                                MenuSeparator {}
+
+                                                Menu {
+                                                    title: "移动到"
+
+                                                    MenuItem {
+                                                        text: "暂无自定义列表"
+                                                        enabled: false
+                                                        visible: !root.libraryBridge
+                                                                 || root.libraryBridge.listCount === 0
+                                                    }
+
+                                                    Repeater {
+                                                        model: root.libraryBridge
+                                                               ? root.libraryBridge.listCount : 0
+
+                                                        delegate: MenuItem {
+                                                            property int targetListIndex: index
+                                                            text: {
+                                                                root.libraryBridge.revision
+                                                                return root.libraryBridge.listNameAt(
+                                                                            targetListIndex)
+                                                            }
+                                                            onTriggered: root.libraryBridge.moveVideoToList(
+                                                                             directVideoDelegate.videoPath,
+                                                                             targetListIndex)
                                                         }
-                                                        onTriggered: root.libraryBridge.moveVideoToList(
-                                                                         directVideoDelegate.videoPath,
-                                                                         targetListIndex)
                                                     }
                                                 }
                                             }
@@ -410,6 +457,10 @@ Rectangle {
                                             property int listIndex: index
                                             property bool expanded: true
                                             width: learningVideoList.width
+                                                   + root.libraryChildIndent
+                                            transform: Translate {
+                                                x: -root.libraryChildIndent
+                                            }
                                             spacing: 4
 
                                             Rectangle {
@@ -499,8 +550,9 @@ Rectangle {
                                                     property string videoPath: root.libraryBridge.listVideoPathAt(
                                                                                    customListDelegate.listIndex,
                                                                                    groupedVideoIndex)
-                                                    width: customListDelegate.width - 16
-                                                    x: 16
+                                                    width: customListDelegate.width
+                                                           - root.libraryChildIndent
+                                                    x: root.libraryChildIndent
                                                     height: 38
                                                     radius: 8
                                                     focus: root.selectedVideoPath
@@ -594,37 +646,77 @@ Rectangle {
 
                                                     Menu {
                                                         id: groupedVideoMenu
+
                                                         MenuItem {
-                                                            text: "移到正在学习"
-                                                            onTriggered: root.libraryBridge.moveVideoToList(
-                                                                             groupedVideoDelegate.videoPath,
-                                                                             -1)
+                                                            text: "标记为已完成"
+                                                            onTriggered: root.markVideoCompleted(
+                                                                             groupedVideoDelegate.videoPath)
                                                         }
 
                                                         MenuSeparator {}
 
-                                                        Repeater {
-                                                            model: root.libraryBridge
-                                                                   ? root.libraryBridge.listCount : 0
+                                                        Menu {
+                                                            title: "移动到"
 
-                                                            delegate: MenuItem {
-                                                                property int targetListIndex: index
-                                                                text: {
-                                                                    root.libraryBridge.revision
-                                                                    return root.libraryBridge.listNameAt(
-                                                                                targetListIndex)
-                                                                }
-                                                                enabled: targetListIndex
-                                                                         !== customListDelegate.listIndex
+                                                            MenuItem {
+                                                                text: "正在学习"
                                                                 onTriggered: root.libraryBridge.moveVideoToList(
                                                                                  groupedVideoDelegate.videoPath,
-                                                                                 targetListIndex)
+                                                                                 -1)
+                                                            }
+
+                                                            MenuSeparator {}
+
+                                                            Repeater {
+                                                                model: root.libraryBridge
+                                                                       ? root.libraryBridge.listCount : 0
+
+                                                                delegate: MenuItem {
+                                                                    property int targetListIndex: index
+                                                                    text: {
+                                                                        root.libraryBridge.revision
+                                                                        return root.libraryBridge.listNameAt(
+                                                                                    targetListIndex)
+                                                                    }
+                                                                    enabled: targetListIndex
+                                                                             !== customListDelegate.listIndex
+                                                                    onTriggered: root.libraryBridge.moveVideoToList(
+                                                                                     groupedVideoDelegate.videoPath,
+                                                                                     targetListIndex)
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
+                                    }
+                                }
+
+                                CompletedVideoList {
+                                    id: completedVideoList
+                                    visible: showCompletedVideos
+                                    anchors.top: categoryHeader.bottom
+                                    anchors.topMargin: 4
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    libraryBridge: root.libraryBridge
+                                    selectedVideoPath: root.selectedVideoPath
+                                    childIndent: root.libraryChildIndent
+                                    elevatedBg: root.elevatedBg
+                                    borderColor: root.borderColor
+                                    textPrimary: root.textPrimary
+                                    textSecondary: root.textSecondary
+                                    accent: root.accent
+                                    accentBg: root.accentBg
+                                    onVideoSelected: function(path) {
+                                        root.selectedVideoPath = path
+                                    }
+                                    onVideoOpenRequested: function(path) {
+                                        root.videoOpenRequested(path)
+                                    }
+                                    onRestoreRequested: function(path) {
+                                        root.restoreCompletedVideo(path)
                                     }
                                 }
                             }

@@ -1,7 +1,7 @@
 //! Persistent video library used by the "正在学习" view.
 
 use crate::sqlite::{default_database_path, ensure_schema, sqlite_error};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -66,10 +66,13 @@ impl VideoLibraryRepository {
                 "INSERT INTO video (
                     path, title, duration, learning_status, last_opened_at
                  ) VALUES (?1, ?2, ?3, 'in_progress', ?4)
-                 ON CONFLICT(path) DO UPDATE SET
+                ON CONFLICT(path) DO UPDATE SET
                     title = excluded.title,
                     duration = excluded.duration,
-                    learning_status = 'in_progress',
+                    learning_status = CASE
+                        WHEN video.learning_status = 'completed' THEN 'completed'
+                        ELSE 'in_progress'
+                    END,
                     last_opened_at = excluded.last_opened_at",
                 params![path, title, duration_secs, opened_at],
             )
@@ -78,17 +81,28 @@ impl VideoLibraryRepository {
     }
 
     pub fn list_in_progress(&self) -> els_types::AppResult<Vec<LearningVideo>> {
+        self.list_videos_by_status("in_progress")
+    }
+
+    pub fn list_completed(&self) -> els_types::AppResult<Vec<LearningVideo>> {
+        self.list_videos_by_status("completed")
+    }
+
+    fn list_videos_by_status(
+        &self,
+        learning_status: &str,
+    ) -> els_types::AppResult<Vec<LearningVideo>> {
         let mut statement = self
             .connection()?
             .prepare(
                 "SELECT path, title, duration, last_opened_at, list_id
                  FROM video
-                 WHERE learning_status = 'in_progress'
+                 WHERE learning_status = ?1
                  ORDER BY last_opened_at DESC, id DESC",
             )
             .map_err(sqlite_error)?;
         let rows = statement
-            .query_map([], |row| {
+            .query_map(params![learning_status], |row| {
                 Ok(LearningVideo {
                     path: row.get(0)?,
                     title: row.get(1)?,
@@ -102,12 +116,48 @@ impl VideoLibraryRepository {
     }
 
     pub fn list_video_lists(&self) -> els_types::AppResult<Vec<VideoList>> {
+        self.list_video_lists_by_status("in_progress")
+    }
+
+    pub fn list_completed_video_lists(&self) -> els_types::AppResult<Vec<VideoList>> {
         let mut statement = self
             .connection()?
-            .prepare("SELECT id, name FROM video_list ORDER BY created_at, id")
+            .prepare(
+                "SELECT id, name FROM video_list
+                 WHERE learning_status = 'completed'
+                   AND EXISTS (
+                       SELECT 1 FROM video
+                       WHERE video.list_id = video_list.id
+                         AND video.learning_status = 'completed'
+                   )
+                 ORDER BY created_at, id",
+            )
             .map_err(sqlite_error)?;
         let rows = statement
             .query_map([], |row| {
+                Ok(VideoList {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                })
+            })
+            .map_err(sqlite_error)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(sqlite_error)
+    }
+
+    fn list_video_lists_by_status(
+        &self,
+        learning_status: &str,
+    ) -> els_types::AppResult<Vec<VideoList>> {
+        let mut statement = self
+            .connection()?
+            .prepare(
+                "SELECT id, name FROM video_list
+                 WHERE learning_status = ?1
+                 ORDER BY created_at, id",
+            )
+            .map_err(sqlite_error)?;
+        let rows = statement
+            .query_map(params![learning_status], |row| {
                 Ok(VideoList {
                     id: row.get(0)?,
                     name: row.get(1)?,
@@ -131,7 +181,8 @@ impl VideoLibraryRepository {
             .min(i64::MAX as u128) as i64;
         self.connection()?
             .execute(
-                "INSERT INTO video_list (name, created_at) VALUES (?1, ?2)",
+                "INSERT INTO video_list (name, learning_status, created_at)
+                 VALUES (?1, 'in_progress', ?2)",
                 params![name, created_at],
             )
             .map_err(sqlite_error)?;
@@ -172,6 +223,87 @@ impl VideoLibraryRepository {
         Ok(())
     }
 
+    pub fn mark_completed(&mut self, video_path: &str) -> els_types::AppResult<()> {
+        self.move_to_status(video_path, "in_progress", "completed")
+    }
+
+    pub fn restore_to_learning(&mut self, video_path: &str) -> els_types::AppResult<()> {
+        self.move_to_status(video_path, "completed", "in_progress")
+    }
+
+    fn move_to_status(
+        &mut self,
+        video_path: &str,
+        source_status: &str,
+        target_status: &str,
+    ) -> els_types::AppResult<()> {
+        let transaction = self
+            .connection()?
+            .unchecked_transaction()
+            .map_err(sqlite_error)?;
+        let source_list_name = transaction
+            .query_row(
+                "SELECT video_list.name
+                 FROM video
+                 LEFT JOIN video_list ON video.list_id = video_list.id
+                 WHERE video.path = ?1 AND video.learning_status = ?2",
+                params![video_path, source_status],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map_err(sqlite_error)?
+            .ok_or(els_types::AppError::NotFound)?;
+
+        let target_list_id = match source_list_name {
+            Some(name) => Some(Self::find_or_create_list(
+                &transaction,
+                &name,
+                target_status,
+            )?),
+            None => None,
+        };
+        let changed = transaction
+            .execute(
+                "UPDATE video
+                 SET learning_status = ?1, list_id = ?2
+                 WHERE path = ?3 AND learning_status = ?4",
+                params![target_status, target_list_id, video_path, source_status],
+            )
+            .map_err(sqlite_error)?;
+        if changed == 0 {
+            return Err(els_types::AppError::NotFound);
+        }
+        transaction.commit().map_err(sqlite_error)
+    }
+
+    fn find_or_create_list(
+        transaction: &Transaction<'_>,
+        name: &str,
+        learning_status: &str,
+    ) -> els_types::AppResult<i64> {
+        let created_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+            .min(i64::MAX as u128) as i64;
+        transaction
+            .execute(
+                "INSERT INTO video_list (name, learning_status, created_at)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(learning_status, name) DO NOTHING",
+                params![name, learning_status, created_at],
+            )
+            .map_err(sqlite_error)?;
+        transaction
+            .query_row(
+                "SELECT id FROM video_list
+                 WHERE learning_status = ?1 AND name = ?2",
+                params![learning_status, name],
+                |row| row.get(0),
+            )
+            .map_err(sqlite_error)
+    }
+
     pub fn delete_video_list(&mut self, list_id: i64) -> els_types::AppResult<()> {
         let connection = self.connection()?;
         let transaction = connection.unchecked_transaction().map_err(sqlite_error)?;
@@ -198,16 +330,20 @@ impl VideoLibraryRepository {
 mod tests {
     use super::VideoLibraryRepository;
 
-    #[test]
-    fn records_lists_and_updates_opened_videos_without_duplicates() {
-        let db_path = std::env::temp_dir().join(format!(
-            "els-video-library-{}-{}.sqlite3",
+    fn temporary_database(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "els-{name}-{}-{}.sqlite3",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system clock")
                 .as_nanos()
-        ));
+        ))
+    }
+
+    #[test]
+    fn records_lists_and_updates_opened_videos_without_duplicates() {
+        let db_path = temporary_database("video-library");
         let mut repository = VideoLibraryRepository::open_path(&db_path).expect("open repository");
 
         repository
@@ -262,6 +398,90 @@ mod tests {
             repository.list_in_progress().expect("reload videos").len(),
             1
         );
+
+        drop(repository);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn moves_videos_between_matching_status_scoped_lists() {
+        let db_path = temporary_database("completed-library");
+        let mut repository = VideoLibraryRepository::open_path(&db_path).expect("open repository");
+        repository
+            .record_opened("/tmp/first.mp4", "first.mp4", 60.0)
+            .expect("record first video");
+        repository
+            .record_opened("/tmp/second.mp4", "second.mp4", 90.0)
+            .expect("record second video");
+        repository
+            .create_video_list("Scene 1")
+            .expect("create source list");
+        let source_list = repository.list_video_lists().expect("list source lists")[0].clone();
+        repository
+            .move_video_to_list("/tmp/first.mp4", Some(source_list.id))
+            .expect("group first video");
+        repository
+            .move_video_to_list("/tmp/second.mp4", Some(source_list.id))
+            .expect("group second video");
+
+        repository
+            .mark_completed("/tmp/first.mp4")
+            .expect("complete first video");
+        repository
+            .mark_completed("/tmp/second.mp4")
+            .expect("complete second video");
+        let completed_lists = repository
+            .list_completed_video_lists()
+            .expect("list completed lists");
+        assert_eq!(completed_lists.len(), 1);
+        assert_eq!(completed_lists[0].name, "Scene 1");
+        assert_ne!(completed_lists[0].id, source_list.id);
+        let completed = repository.list_completed().expect("list completed videos");
+        assert_eq!(completed.len(), 2);
+        assert!(completed
+            .iter()
+            .all(|video| video.list_id == Some(completed_lists[0].id)));
+
+        repository
+            .record_opened("/tmp/first.mp4", "First lesson.mp4", 61.0)
+            .expect("reopen completed video");
+        assert_eq!(
+            repository.list_completed().expect("still completed").len(),
+            2
+        );
+
+        repository
+            .restore_to_learning("/tmp/first.mp4")
+            .expect("restore first video");
+        let in_progress = repository.list_in_progress().expect("list restored videos");
+        assert_eq!(in_progress.len(), 1);
+        assert_eq!(in_progress[0].list_id, Some(source_list.id));
+
+        drop(repository);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn migrates_existing_video_lists_to_in_progress_status() {
+        let db_path = temporary_database("legacy-video-lists");
+        let connection = rusqlite::Connection::open(&db_path).expect("open legacy database");
+        connection
+            .execute_batch(
+                "CREATE TABLE video_list (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    created_at INTEGER NOT NULL DEFAULT 0
+                 );
+                 INSERT INTO video_list (id, name, created_at) VALUES (7, 'Legacy', 1);",
+            )
+            .expect("create legacy list");
+        drop(connection);
+
+        let repository = VideoLibraryRepository::open_path(&db_path).expect("migrate repository");
+        let lists = repository.list_video_lists().expect("list migrated lists");
+        assert_eq!(lists.len(), 1);
+        assert_eq!(lists[0].id, 7);
+        assert_eq!(lists[0].name, "Legacy");
 
         drop(repository);
         let _ = std::fs::remove_file(db_path);

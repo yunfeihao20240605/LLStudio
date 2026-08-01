@@ -27,7 +27,7 @@ ApplicationWindow {
     }
 
     function startOrContinueTraining(repeatCount, intervalSeconds) {
-        if (trainingController.hasStartedCurrentSelection) {
+        if (trainingController.hasActiveSession) {
             if (mediaBridge.isPlaying) {
                 if (trainingController.isTraining)
                     trainingController.pauseTraining()
@@ -50,9 +50,37 @@ ApplicationWindow {
         }
     }
 
+    function startLabelTraining(index) {
+        trainingController.stopTraining()
+        if (!segmentBridge.buildLabelPlaybackPlan(index))
+            return false
+
+        var ranges = []
+        for (var rangeIndex = 0;
+             rangeIndex < segmentBridge.labelPlaybackRangeCount;
+             ++rangeIndex) {
+            ranges.push({
+                start: segmentBridge.labelPlaybackRangeStartAt(rangeIndex),
+                end: segmentBridge.labelPlaybackRangeEndAt(rangeIndex)
+            })
+        }
+
+        return trainingController.startRangeSequence(
+                    ranges,
+                    controlPanel.repeatCount,
+                    controlPanel.intervalSeconds,
+                    segmentBridge.labelPlaybackLabel)
+    }
+
     function toggleTrainingPlayback() {
         if (!trainingController.mediaAvailable)
             return
+
+        if (trainingController.hasActiveSession) {
+            startOrContinueTraining(controlPanel.repeatCount,
+                                    controlPanel.intervalSeconds)
+            return
+        }
 
         if (!trainingController.selectionAvailable) {
             toggleNormalPlayback()
@@ -66,9 +94,11 @@ ApplicationWindow {
         if (!trainingController.mediaAvailable)
             return
 
-        if (trainingController.isTraining) {
-            trainingController.stopTraining()
-        } else if (mediaBridge.isPlaying) {
+        var wasPlaying = mediaBridge.isPlaying
+        if (trainingController.hasActiveSession)
+            trainingController.cancelTrainingSession()
+
+        if (wasPlaying) {
             mediaBridge.pause()
         } else {
             mediaBridge.play()
@@ -196,7 +226,9 @@ ApplicationWindow {
         selectionEnd: waveformBridge.selectionEnd
 
         onLoopCompleted: {
-            if (segmentBridge.activeIndex >= 0)
+            if (trainingController.isLabelSequence)
+                segmentBridge.recordLabelPlaybackLoop()
+            else if (segmentBridge.activeIndex >= 0)
                 segmentBridge.incrementCompletedLoops()
         }
 
@@ -340,14 +372,7 @@ ApplicationWindow {
                     subtitleBridge: subtitleBridge
                     waveformBridge: waveformBridge
                     onManualSeekRequested: trainingController.stopTraining()
-                    onManualPlaybackControlRequested: function(wasPlaying) {
-                        if (!trainingController.isTraining)
-                            return
-                        if (wasPlaying)
-                            trainingController.notifyPlaybackPaused()
-                        else
-                            trainingController.resumeTraining()
-                    }
+                    onNormalPlaybackToggleRequested: root.toggleNormalPlayback()
                     onVideoLoaded: function(path, durationSecs) {
                         trainingController.stopTraining()
                         if (libraryBridge.recordOpenedVideo(path, durationSecs))
@@ -396,9 +421,10 @@ ApplicationWindow {
                     SplitView.minimumHeight: 110
                     SplitView.preferredHeight: 130
                     canStartTraining: trainingController.mediaAvailable
-                                      && trainingController.selectionAvailable
+                                      && (trainingController.selectionAvailable
+                                          || trainingController.hasActiveSession)
                     isTraining: trainingController.isTraining
-                    hasStartedTraining: trainingController.hasStartedCurrentSelection
+                    hasStartedTraining: trainingController.hasActiveSession
                     isPlaybackPlaying: mediaBridge.isPlaying
                     completedLoops: trainingController.completedLoops
                     totalLoops: trainingController.totalLoops
@@ -449,6 +475,9 @@ ApplicationWindow {
                     }
                     onSegmentDeleteRequested: function(index) {
                         root.deleteLearningSegment(index)
+                    }
+                    onLabelPlaybackRequested: function(index) {
+                        root.startLabelTraining(index)
                     }
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg

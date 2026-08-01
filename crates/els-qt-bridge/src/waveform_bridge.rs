@@ -4,6 +4,7 @@ use core::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QVector};
 use els_waveform_core::WaveformEngine;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
@@ -32,6 +33,12 @@ pub mod qobject {
         #[qproperty(i32, selection_revision, cxx_name = "selectionRevision")]
         #[qproperty(bool, is_loading, cxx_name = "isLoading")]
         #[qproperty(QString, status_message, cxx_name = "statusMessage")]
+        #[qproperty(QVector_f32, detail_peak_values, cxx_name = "detailPeakValues")]
+        #[qproperty(f64, detail_start, cxx_name = "detailStart")]
+        #[qproperty(f64, detail_end, cxx_name = "detailEnd")]
+        #[qproperty(f64, detail_bin_duration, cxx_name = "detailBinDuration")]
+        #[qproperty(i32, detail_revision, cxx_name = "detailRevision")]
+        #[qproperty(bool, is_detail_loading, cxx_name = "isDetailLoading")]
         type WaveformBridge = super::WaveformBridgeRust;
 
         #[qinvokable]
@@ -75,6 +82,15 @@ pub mod qobject {
         fn poll_background_task(self: Pin<&mut WaveformBridge>) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "requestDetailRange"]
+        fn request_detail_range(
+            self: Pin<&mut WaveformBridge>,
+            visible_start: f64,
+            visible_end: f64,
+            zoom_factor: f64,
+        ) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "peakMinAt"]
         fn peak_min_at(self: Pin<&mut WaveformBridge>, index: i32) -> f32;
 
@@ -102,11 +118,24 @@ pub struct WaveformBridgeRust {
     selection_revision: i32,
     is_loading: bool,
     status_message: QString,
+    detail_peak_values: QVector<f32>,
+    detail_start: f64,
+    detail_end: f64,
+    detail_bin_duration: f64,
+    detail_revision: i32,
+    is_detail_loading: bool,
     engine: els_waveform_core::FfmpegWaveformEngine,
     waveform: els_waveform_core::WaveformData,
     loaded_bins: Vec<bool>,
     active_task_id: u64,
     task_receiver: Option<Receiver<WaveformTaskEvent>>,
+    detail_receiver: Option<Receiver<DetailTaskEvent>>,
+    video_path: Option<String>,
+    detail_tiles: HashMap<u64, els_waveform_core::WaveformTile>,
+    detail_pending: HashSet<u64>,
+    detail_request_id: u64,
+    detail_requested_start: f64,
+    detail_requested_end: f64,
 }
 
 impl Default for WaveformBridgeRust {
@@ -131,11 +160,24 @@ impl Default for WaveformBridgeRust {
             selection_revision: 1,
             is_loading: false,
             status_message: QString::from("Generated preview waveform"),
+            detail_peak_values: QVector::from(Vec::new()),
+            detail_start: 0.0,
+            detail_end: 0.0,
+            detail_bin_duration: els_waveform_core::DETAIL_SECONDS_PER_BIN,
+            detail_revision: 1,
+            is_detail_loading: false,
             engine,
             waveform,
             loaded_bins: vec![true; total_bin_count as usize],
             active_task_id: 0,
             task_receiver: None,
+            detail_receiver: None,
+            video_path: None,
+            detail_tiles: HashMap::new(),
+            detail_pending: HashSet::new(),
+            detail_request_id: 0,
+            detail_requested_start: 0.0,
+            detail_requested_end: 0.0,
         }
     }
 }
@@ -156,8 +198,9 @@ impl qobject::WaveformBridge {
         let zero_bins =
             vec![els_waveform_core::WaveformBin { min: 0.0, max: 0.0 }; total_bin_count as usize];
 
+        let worker_path = requested_path.clone();
         thread::spawn(move || {
-            let preview_result = if requested_path.trim().is_empty() {
+            let preview_result = if worker_path.trim().is_empty() {
                 engine.generate(&els_waveform_core::AudioSource {
                     video_path: None,
                     duration_secs,
@@ -165,7 +208,7 @@ impl qobject::WaveformBridge {
                 })
             } else {
                 engine.generate_for_quality_with_progress(
-                    &requested_path,
+                    &worker_path,
                     duration_secs,
                     quality,
                     |bins, loaded_bin_count| {
@@ -185,10 +228,10 @@ impl qobject::WaveformBridge {
 
             match preview_result {
                 Ok(waveform) => {
-                    let status = if requested_path.trim().is_empty() {
+                    let status = if worker_path.trim().is_empty() {
                         "Generated fallback preview waveform".to_string()
                     } else {
-                        format!("Loaded preview waveform for {}", requested_path)
+                        format!("Loaded preview waveform for {}", worker_path)
                     };
                     let _ = sender.send(WaveformTaskEvent::Finished {
                         task_id,
@@ -206,7 +249,21 @@ impl qobject::WaveformBridge {
         });
 
         self.as_mut().rust_mut().active_task_id = task_id;
+        self.as_mut().rust_mut().video_path = if requested_path.trim().is_empty() {
+            None
+        } else {
+            Some(requested_path)
+        };
         self.as_mut().rust_mut().task_receiver = Some(receiver);
+        self.as_mut().rust_mut().detail_receiver = None;
+        self.as_mut().rust_mut().detail_tiles.clear();
+        self.as_mut().rust_mut().detail_pending.clear();
+        self.as_mut()
+            .set_detail_peak_values(QVector::from(Vec::new()));
+        self.as_mut().set_detail_start(0.0);
+        self.as_mut().set_detail_end(0.0);
+        self.as_mut().bump_detail_revision();
+        self.as_mut().set_is_detail_loading(false);
         self.as_mut().rust_mut().waveform = els_waveform_core::WaveformData {
             duration_secs: duration_secs.max(0.0),
             bins: zero_bins.clone(),
@@ -226,6 +283,83 @@ impl qobject::WaveformBridge {
         self.as_mut().set_is_loading(true);
         self.as_mut()
             .set_status_message(QString::from("Generating preview waveform..."));
+        true
+    }
+
+    fn request_detail_range(
+        mut self: Pin<&mut Self>,
+        visible_start: f64,
+        visible_end: f64,
+        zoom_factor: f64,
+    ) -> bool {
+        if zoom_factor < 200.0 || self.rust().video_path.is_none() {
+            return false;
+        }
+        let duration = self.rust().duration_secs;
+        let start = visible_start.min(visible_end).clamp(0.0, duration);
+        let end = visible_end.max(visible_start).clamp(start, duration);
+        if end <= start {
+            return false;
+        }
+        let same_request = (self.rust().detail_requested_start - start).abs() < 0.001
+            && (self.rust().detail_requested_end - end).abs() < 0.001;
+        if same_request && self.rust().detail_receiver.is_some() {
+            return true;
+        }
+        if self.rust().detail_receiver.is_some() {
+            self.as_mut().rust_mut().detail_receiver = None;
+            self.as_mut().rust_mut().detail_pending.clear();
+        }
+        self.as_mut().rust_mut().detail_requested_start = start;
+        self.as_mut().rust_mut().detail_requested_end = end;
+        self.as_mut().rebuild_detail_view(start, end);
+
+        let prefetch = ((end - start) * 0.5).max(els_waveform_core::DETAIL_TILE_DURATION_SECS);
+        let request_start = (start - prefetch).max(0.0);
+        let request_end = (end + prefetch).min(duration);
+        let tile_indices =
+            els_waveform_core::detail_tile_indices(request_start, request_end, duration);
+        let mut needed = Vec::new();
+        for tile_index in tile_indices {
+            let missing = !self.rust().detail_tiles.contains_key(&tile_index);
+            let newly_pending =
+                missing && self.as_mut().rust_mut().detail_pending.insert(tile_index);
+            if newly_pending {
+                needed.push(tile_index);
+            }
+        }
+
+        if needed.is_empty() {
+            self.as_mut().set_is_detail_loading(false);
+            return true;
+        }
+
+        let request_id = self.rust().detail_request_id.saturating_add(1);
+        self.as_mut().rust_mut().detail_request_id = request_id;
+        let path = self.rust().video_path.clone().unwrap_or_default();
+        let engine = self.rust().engine;
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            for tile_index in needed {
+                match engine.generate_detail_tile(&path, duration, tile_index) {
+                    Ok(tile) => {
+                        let _ = sender.send(DetailTaskEvent::Finished { request_id, tile });
+                    }
+                    Err(error) => {
+                        let _ = sender.send(DetailTaskEvent::Failed {
+                            request_id,
+                            tile_index,
+                            error: format!(
+                                "Failed to generate detail waveform tile {tile_index}: {error}"
+                            ),
+                        });
+                    }
+                }
+            }
+            let _ = sender.send(DetailTaskEvent::Complete { request_id });
+        });
+        self.as_mut().rust_mut().detail_receiver = Some(receiver);
+        self.as_mut().set_is_detail_loading(true);
         true
     }
 
@@ -332,21 +466,10 @@ impl qobject::WaveformBridge {
     }
 
     fn poll_background_task(mut self: Pin<&mut Self>) -> bool {
-        let receiver = match self.as_mut().rust_mut().task_receiver.take() {
-            Some(receiver) => receiver,
-            None => return false,
-        };
-
-        let mut receiver = Some(receiver);
         let mut changed = false;
-
-        loop {
-            let result = match receiver.as_ref() {
-                Some(rx) => rx.try_recv(),
-                None => break,
-            };
-
-            match result {
+        let mut preview_receiver = self.as_mut().rust_mut().task_receiver.take();
+        while let Some(receiver) = preview_receiver.as_ref() {
+            match receiver.try_recv() {
                 Ok(WaveformTaskEvent::Partial {
                     task_id,
                     bins,
@@ -391,7 +514,7 @@ impl qobject::WaveformBridge {
                     self.as_mut().set_duration_secs(duration_secs);
                     self.as_mut().set_status_message(QString::from(&status));
                     self.as_mut().set_is_loading(false);
-                    receiver = None;
+                    preview_receiver = None;
                     changed = true;
                     break;
                 }
@@ -402,7 +525,7 @@ impl qobject::WaveformBridge {
                         self.as_mut().set_is_loading(false);
                         changed = true;
                     }
-                    receiver = None;
+                    preview_receiver = None;
                     break;
                 }
                 Err(TryRecvError::Empty) => {
@@ -412,15 +535,111 @@ impl qobject::WaveformBridge {
                     self.as_mut()
                         .set_status_message(QString::from("Waveform task stopped unexpectedly"));
                     self.as_mut().set_is_loading(false);
-                    receiver = None;
+                    preview_receiver = None;
                     changed = true;
                     break;
                 }
             }
         }
+        self.as_mut().rust_mut().task_receiver = preview_receiver;
 
-        self.as_mut().rust_mut().task_receiver = receiver;
+        let mut detail_receiver = self.as_mut().rust_mut().detail_receiver.take();
+        while let Some(receiver) = detail_receiver.as_ref() {
+            match receiver.try_recv() {
+                Ok(DetailTaskEvent::Finished { request_id, tile }) => {
+                    if request_id != self.rust().detail_request_id {
+                        continue;
+                    }
+                    self.as_mut()
+                        .rust_mut()
+                        .detail_pending
+                        .remove(&tile.tile_index);
+                    self.as_mut()
+                        .rust_mut()
+                        .detail_tiles
+                        .insert(tile.tile_index, tile);
+                    if self.rust().detail_tiles.len() > 64 {
+                        let protected = els_waveform_core::detail_tile_indices(
+                            self.rust().detail_requested_start,
+                            self.rust().detail_requested_end,
+                            self.rust().duration_secs,
+                        );
+                        if let Some(evicted) =
+                            self.rust().detail_tiles.keys().copied().find(|index| {
+                                !self.rust().detail_pending.contains(index)
+                                    && !protected.contains(index)
+                            })
+                        {
+                            self.as_mut().rust_mut().detail_tiles.remove(&evicted);
+                        }
+                    }
+                    let start = self.rust().detail_requested_start;
+                    let end = self.rust().detail_requested_end;
+                    self.as_mut().rebuild_detail_view(start, end);
+                    changed = true;
+                }
+                Ok(DetailTaskEvent::Failed {
+                    request_id,
+                    tile_index,
+                    error,
+                }) => {
+                    if request_id == self.rust().detail_request_id {
+                        self.as_mut().rust_mut().detail_pending.remove(&tile_index);
+                        eprintln!("{error}");
+                        self.as_mut().set_status_message(QString::from(&error));
+                        changed = true;
+                    }
+                }
+                Ok(DetailTaskEvent::Complete { request_id }) => {
+                    if request_id == self.rust().detail_request_id {
+                        self.as_mut().set_is_detail_loading(false);
+                    }
+                    detail_receiver = None;
+                    break;
+                }
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    self.as_mut().set_is_detail_loading(false);
+                    detail_receiver = None;
+                    break;
+                }
+            }
+        }
+        self.as_mut().rust_mut().detail_receiver = detail_receiver;
         changed
+    }
+
+    fn rebuild_detail_view(mut self: Pin<&mut Self>, visible_start: f64, visible_end: f64) {
+        let duration = self.rust().duration_secs;
+        let indices = els_waveform_core::detail_tile_indices(visible_start, visible_end, duration);
+        if indices.is_empty()
+            || indices
+                .iter()
+                .any(|index| !self.rust().detail_tiles.contains_key(index))
+        {
+            return;
+        }
+
+        let first = self.rust().detail_tiles.get(&indices[0]).cloned();
+        let last = self
+            .rust()
+            .detail_tiles
+            .get(indices.last().unwrap_or(&indices[0]))
+            .cloned();
+        let (Some(first), Some(last)) = (first, last) else {
+            return;
+        };
+        let mut bins = Vec::new();
+        for index in indices {
+            if let Some(tile) = self.rust().detail_tiles.get(&index) {
+                bins.extend_from_slice(&tile.bins);
+            }
+        }
+        self.as_mut().set_detail_peak_values(flatten_bins(&bins));
+        self.as_mut().set_detail_start(first.start_secs);
+        self.as_mut().set_detail_end(last.end_secs);
+        self.as_mut().set_detail_bin_duration(first.seconds_per_bin);
+        self.as_mut().bump_detail_revision();
     }
 
     fn peak_min_at(self: Pin<&mut Self>, index: i32) -> f32 {
@@ -458,6 +677,11 @@ impl qobject::WaveformBridge {
         let next = self.rust().selection_revision.wrapping_add(1).max(1);
         self.as_mut().set_selection_revision(next);
     }
+
+    fn bump_detail_revision(mut self: Pin<&mut Self>) {
+        let next = self.rust().detail_revision.wrapping_add(1).max(1);
+        self.as_mut().set_detail_revision(next);
+    }
 }
 
 enum WaveformTaskEvent {
@@ -476,6 +700,21 @@ enum WaveformTaskEvent {
     Failed {
         task_id: u64,
         error: String,
+    },
+}
+
+enum DetailTaskEvent {
+    Finished {
+        request_id: u64,
+        tile: els_waveform_core::WaveformTile,
+    },
+    Failed {
+        request_id: u64,
+        tile_index: u64,
+        error: String,
+    },
+    Complete {
+        request_id: u64,
     },
 }
 

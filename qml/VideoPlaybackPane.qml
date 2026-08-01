@@ -17,9 +17,10 @@ Rectangle {
     property var subtitleBridge
     property var waveformBridge
     property bool fullScreenMode: false
+    property bool subtitlesVisible: true
 
     signal manualSeekRequested()
-    signal manualPlaybackControlRequested(bool wasPlaying)
+    signal normalPlaybackToggleRequested()
     signal videoLoaded(string path, real durationSecs)
     signal fullScreenToggleRequested()
 
@@ -48,6 +49,10 @@ Rectangle {
         var original = subtitleBridge.activeOriginalText
         var translated = subtitleBridge.activeTranslatedText
         return translated.length > 0 ? original + "\n" + translated : original
+    }
+
+    function toggleSubtitles() {
+        subtitlesVisible = !subtitlesVisible
     }
 
     function syncPlaybackDependentPanels() {
@@ -234,7 +239,7 @@ Rectangle {
                     height: playbackSubtitle.implicitHeight + 18
                     radius: 7
                     color: "#b3000000"
-                    visible: root.activeSubtitleText().length > 0
+                    visible: root.subtitlesVisible && root.activeSubtitleText().length > 0
 
                     Text {
                         id: playbackSubtitle
@@ -250,6 +255,7 @@ Rectangle {
                 }
 
                 Rectangle {
+                    id: fullScreenExitButton
                     z: 20
                     anchors.top: parent.top
                     anchors.right: parent.right
@@ -274,6 +280,41 @@ Rectangle {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.fullScreenToggleRequested()
                     }
+                }
+
+                Rectangle {
+                    z: 20
+                    anchors.top: parent.top
+                    anchors.right: fullScreenExitButton.left
+                    anchors.topMargin: 16
+                    anchors.rightMargin: 8
+                    width: 44
+                    height: 44
+                    radius: 9
+                    visible: root.fullScreenMode
+                    color: root.subtitlesVisible
+                           ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.9)
+                           : "#99000000"
+                    border.color: root.subtitlesVisible ? root.accent : "#66ffffff"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "CC"
+                        color: "#ffffff"
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: fullScreenSubtitleMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.toggleSubtitles()
+                    }
+
+                    ToolTip.visible: fullScreenSubtitleMouseArea.containsMouse
+                    ToolTip.text: root.subtitlesVisible ? "隐藏字幕" : "显示字幕"
                 }
             }
         }
@@ -302,15 +343,7 @@ Rectangle {
                     MouseArea {
                         anchors.fill: parent
                         enabled: mediaBridge && mediaBridge.loadedPath.length > 0
-                        onClicked: {
-                            var wasPlaying = mediaBridge.isPlaying
-                            root.manualPlaybackControlRequested(wasPlaying)
-                            if (wasPlaying)
-                                mediaBridge.pause()
-                            else
-                                mediaBridge.play()
-                            syncPlaybackDependentPanels()
-                        }
+                        onClicked: root.normalPlaybackToggleRequested()
                     }
                 }
 
@@ -379,30 +412,52 @@ Rectangle {
             }
 
             Repeater {
-                model: ["📷", "⚙", "⛶"]
+                model: [
+                    { icon: "CC", action: "subtitle" },
+                    { icon: "⚙", action: "settings" },
+                    { icon: "⛶", action: "fullscreen" }
+                ]
 
                 delegate: Rectangle {
                     width: 36
                     height: 36
                     radius: 10
-                    color: elevatedBg
-                    border.color: borderColor
+                    color: modelData.action === "subtitle" && root.subtitlesVisible
+                           ? root.accentBg : root.elevatedBg
+                    border.color: modelData.action === "subtitle" && root.subtitlesVisible
+                                  ? root.accent : root.borderColor
 
                     Text {
                         anchors.centerIn: parent
-                        text: modelData
-                        color: textPrimary
-                        font.pixelSize: 16
+                        text: modelData.icon
+                        color: modelData.action === "subtitle" && root.subtitlesVisible
+                               ? root.accent : root.textPrimary
+                        font.pixelSize: modelData.action === "subtitle" ? 12 : 16
+                        font.bold: modelData.action === "subtitle"
                     }
 
                     MouseArea {
+                        id: playbackToolMouseArea
                         anchors.fill: parent
-                        enabled: modelData === "⛶"
-                                 && root.mediaBridge
-                                 && root.mediaBridge.loadedPath.length > 0
+                        hoverEnabled: true
+                        enabled: modelData.action === "subtitle"
+                                 || (modelData.action === "fullscreen"
+                                     && root.mediaBridge
+                                     && root.mediaBridge.loadedPath.length > 0)
                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: root.fullScreenToggleRequested()
+                        onClicked: {
+                            if (modelData.action === "subtitle")
+                                root.toggleSubtitles()
+                            else if (modelData.action === "fullscreen")
+                                root.fullScreenToggleRequested()
+                        }
                     }
+
+                    ToolTip.visible: playbackToolMouseArea.containsMouse
+                                         && playbackToolMouseArea.enabled
+                    ToolTip.text: modelData.action === "subtitle"
+                                  ? (root.subtitlesVisible ? "隐藏字幕" : "显示字幕")
+                                  : (modelData.action === "fullscreen" ? "全屏播放" : "")
                 }
             }
         }
