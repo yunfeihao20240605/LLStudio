@@ -11,6 +11,7 @@ fn main() {
             .qml_file("../../qml/ControlPanel.qml")
             .qml_file("../../qml/SelectionTrainingController.qml")
             .qml_file("../../qml/SubtitleView.qml")
+            .qml_file("../../qml/NoteView.qml")
             .qml_file("../../qml/SegmentListView.qml")
             .qml_file("../../qml/StatusBar.qml")
             .qml_file("../../qml/theme/Theme.qml")

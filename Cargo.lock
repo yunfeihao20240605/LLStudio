@@ -322,6 +322,7 @@ dependencies = [
  "cxx-qt-lib",
  "els-learning-core",
  "els-media-core",
+ "els-note-core",
  "els-qt-bridge",
  "els-storage",
  "els-subtitle-core",
@@ -348,6 +349,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "els-note-core"
+version = "0.1.0"
+dependencies = [
+ "els-types",
+]
+
+[[package]]
 name = "els-qt-bridge"
 version = "0.1.0"
 dependencies = [
@@ -357,6 +365,7 @@ dependencies = [
  "cxx-qt-lib",
  "els-learning-core",
  "els-media-core",
+ "els-note-core",
  "els-storage",
  "els-subtitle-core",
  "els-types",
@@ -368,6 +377,7 @@ name = "els-storage"
 version = "0.1.0"
 dependencies = [
  "els-learning-core",
+ "els-note-core",
  "els-types",
  "rusqlite",
 ]

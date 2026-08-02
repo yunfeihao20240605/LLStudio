@@ -1,0 +1,8 @@
+[package]
+name = "els-note-core"
+version.workspace = true
+edition.workspace = true
+description = "视频时间笔记的业务规则与持久化接口，不依赖 Qt 或 SQLite。"
+
+[dependencies]
+els-types = { path = "../els-types" }

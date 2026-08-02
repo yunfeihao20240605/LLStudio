@@ -7,4 +7,5 @@ description = "数据持久化实现（SQLite），实现 els-learning-core 定�
 [dependencies]
 els-types = { path = "../els-types" }
 els-learning-core = { path = "../els-learning-core" }
+els-note-core = { path = "../els-note-core" }
 rusqlite = { version = "0.32.1", features = ["bundled"] }

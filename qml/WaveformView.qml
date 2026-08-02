@@ -28,6 +28,7 @@ Rectangle {
     readonly property color waveformColor: waveformBackgroundLuminance > 0.55 ? "#cfd4dc" : "#6b7280"
 
     signal playbackPositionRequested(real positionSecs)
+    signal noteCreationRequested(real startSecs, real endSecs, bool hasRange)
     signal selectionCleared()
     signal nextSegmentRequested()
 
@@ -213,6 +214,28 @@ Rectangle {
 
     Menu {
         id: waveformContextMenu
+
+        MenuItem {
+            text: waveformBridge
+                  && waveformBridge.hasSelectionStart
+                  && waveformBridge.hasSelectionEnd
+                  && waveformBridge.selectionEnd > waveformBridge.selectionStart
+                  ? "为当前选区添加笔记" : "在当前时间添加笔记"
+            enabled: waveformBridge && waveformBridge.durationSecs > 0
+            onTriggered: {
+                var hasRange = waveformBridge.hasSelectionStart
+                        && waveformBridge.hasSelectionEnd
+                        && waveformBridge.selectionEnd > waveformBridge.selectionStart
+                root.noteCreationRequested(
+                            hasRange ? waveformBridge.selectionStart
+                                     : waveformBridge.currentPosition,
+                            hasRange ? waveformBridge.selectionEnd
+                                     : waveformBridge.currentPosition,
+                            hasRange)
+            }
+        }
+
+        MenuSeparator {}
 
         MenuItem {
             text: "从当前片段结尾开始下一片段"

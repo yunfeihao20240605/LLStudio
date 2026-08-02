@@ -19,7 +19,7 @@ Rectangle {
     property bool fullScreenMode: false
     property bool subtitlesVisible: true
 
-    signal manualSeekRequested()
+    signal manualSeekRequested(real positionSecs)
     signal normalPlaybackToggleRequested()
     signal videoLoaded(string path, real durationSecs)
     signal fullScreenToggleRequested()
@@ -471,8 +471,7 @@ Rectangle {
             enabled: mediaBridge && mediaBridge.duration > 0
 
             onMoved: {
-                root.manualSeekRequested()
-                seekToPosition(value)
+                root.manualSeekRequested(value)
             }
         }
 

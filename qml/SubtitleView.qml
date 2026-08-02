@@ -13,9 +13,12 @@ Rectangle {
     property color accent: "#2f6fed"
     property color accentBg: "#eaf1fe"
     property var subtitleBridge
+    property var noteBridge
     property var waveformBridge
     property int activeTab: 0
     property var subtitleEntries: []
+
+    signal noteNavigationRequested(real startSecs, real endSecs, bool hasRange)
 
     function selectionIsValid() {
         return waveformBridge
@@ -102,20 +105,31 @@ Rectangle {
     }
 
     function clearEditorFocus() {
-        if (!subtitleEditor.activeFocus)
-            return
-        subtitleEditor.focus = false
-        root.forceActiveFocus(Qt.MouseFocusReason)
+        if (subtitleEditor.activeFocus) {
+            subtitleEditor.focus = false
+            root.forceActiveFocus(Qt.MouseFocusReason)
+        }
+        noteView.clearEditorFocus()
     }
 
     function clearEditorFocusIfOutside(sourceItem, sourceX, sourceY) {
-        if (!subtitleEditor.activeFocus || !sourceItem)
+        if (!sourceItem)
             return
-        var point = subtitleEditor.mapFromItem(sourceItem, sourceX, sourceY)
-        if (point.x < 0 || point.y < 0
-                || point.x > subtitleEditor.width
-                || point.y > subtitleEditor.height)
-            clearEditorFocus()
+        if (subtitleEditor.activeFocus) {
+            var point = subtitleEditor.mapFromItem(sourceItem, sourceX, sourceY)
+            if (point.x < 0 || point.y < 0
+                    || point.x > subtitleEditor.width
+                    || point.y > subtitleEditor.height) {
+                subtitleEditor.focus = false
+                root.forceActiveFocus(Qt.MouseFocusReason)
+            }
+        }
+        noteView.clearEditorFocusIfOutside(sourceItem, sourceX, sourceY)
+    }
+
+    function showNoteEditor() {
+        activeTab = 1
+        Qt.callLater(function() { noteView.focusEditor() })
     }
 
     Component.onCompleted: {
@@ -182,8 +196,10 @@ Rectangle {
             Item { Layout.fillWidth: true }
 
             Text {
-                visible: root.activeTab === 0
-                text: root.subtitleEntries.length + " 条字幕"
+                visible: root.activeTab !== 2
+                text: root.activeTab === 0
+                      ? root.subtitleEntries.length + " 条字幕"
+                      : (root.noteBridge ? root.noteBridge.noteCount : 0) + " 条笔记"
                 color: root.textSecondary
                 font.pixelSize: 12
             }
@@ -353,11 +369,28 @@ Rectangle {
             }
         }
 
+        NoteView {
+            id: noteView
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.activeTab === 1
+            noteBridge: root.noteBridge
+            elevatedBg: root.elevatedBg
+            borderColor: root.borderColor
+            textPrimary: root.textPrimary
+            textSecondary: root.textSecondary
+            accent: root.accent
+            accentBg: root.accentBg
+            onNavigationRequested: function(startSecs, endSecs, hasRange) {
+                root.noteNavigationRequested(startSecs, endSecs, hasRange)
+            }
+        }
+
         Text {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: root.activeTab !== 0
-            text: root.activeTab === 1 ? "笔记功能尚未实现" : "单词功能尚未实现"
+            visible: root.activeTab === 2
+            text: "单词功能尚未实现"
             color: root.textSecondary
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter

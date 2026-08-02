@@ -13,6 +13,7 @@ fn main() {
             "src/theme_bridge.rs",
             "src/library_bridge.rs",
             "src/media_bridge.rs",
+            "src/note_bridge.rs",
             "src/segment_bridge.rs",
             "src/subtitle_bridge.rs",
             "src/waveform_bridge.rs",

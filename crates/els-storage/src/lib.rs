@@ -8,12 +8,14 @@
 //! 本 crate 不被 `els-media-core` / `els-waveform-core` / `els-subtitle-core`
 //! 依赖，也不依赖 `els-qt-bridge`。
 
-mod schema;
 mod library;
+mod note;
+mod schema;
 mod settings;
 mod sqlite;
 
 pub use library::{LearningVideo, VideoLibraryRepository, VideoList};
+pub use note::SqliteNoteRepository;
 pub use settings::SettingsStore;
 pub use settings::THEME_MODE_KEY;
 pub use sqlite::SqliteSegmentRepository;

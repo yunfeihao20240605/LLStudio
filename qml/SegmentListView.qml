@@ -22,6 +22,7 @@ Rectangle {
     signal segmentActivated(int index)
     signal segmentDeleteRequested(int index)
     signal labelPlaybackRequested(int index)
+    signal noteCreationRequested(real startSecs, real endSecs)
 
     function formatSeconds(totalSeconds) {
         var safe = Math.max(0, Math.floor(totalSeconds || 0))
@@ -393,6 +394,15 @@ Rectangle {
 
                 Menu {
                     id: segmentContextMenu
+
+                    MenuItem {
+                        text: "为该片段添加笔记"
+                        onTriggered: root.noteCreationRequested(
+                                         segmentDelegate.startSecs,
+                                         segmentDelegate.endSecs)
+                    }
+
+                    MenuSeparator {}
 
                     MenuItem {
                         text: segmentDelegate.marker.length > 0

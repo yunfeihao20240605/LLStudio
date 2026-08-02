@@ -41,6 +41,19 @@ CREATE TABLE IF NOT EXISTS segment_label_history (
     PRIMARY KEY (video_id, label)
 );";
 
+pub const CREATE_VIDEO_NOTE_TABLE: &str = "\
+CREATE TABLE IF NOT EXISTS video_note (
+    id INTEGER PRIMARY KEY,
+    video_id INTEGER NOT NULL,
+    start_time REAL NOT NULL,
+    end_time REAL,
+    content TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_video_note_time
+    ON video_note(video_id, start_time, id);";
+
 pub const CREATE_SETTINGS_TABLE: &str = "\
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

@@ -12,6 +12,7 @@ els-types = { path = "../els-types" }
 els-media-core = { path = "../els-media-core" }
 els-waveform-core = { path = "../els-waveform-core" }
 els-subtitle-core = { path = "../els-subtitle-core" }
+els-note-core = { path = "../els-note-core" }
 els-learning-core = { path = "../els-learning-core" }
 els-storage = { path = "../els-storage" }
 els-qt-bridge = { path = "../els-qt-bridge" }

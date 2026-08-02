@@ -10,6 +10,7 @@ pub mod learning_bridge;
 pub mod library_bridge;
 pub mod media_bridge;
 pub mod mpv_video_item;
+pub mod note_bridge;
 pub mod segment_bridge;
 pub mod subtitle_bridge;
 pub mod theme_bridge;

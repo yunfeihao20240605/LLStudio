@@ -2,7 +2,7 @@
 
 use crate::schema::{
     CREATE_SEGMENT_LABEL_HISTORY_TABLE, CREATE_SEGMENT_TABLE, CREATE_VIDEO_LIST_TABLE,
-    CREATE_VIDEO_TABLE,
+    CREATE_VIDEO_NOTE_TABLE, CREATE_VIDEO_TABLE,
 };
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
@@ -290,6 +290,9 @@ pub(crate) fn ensure_schema(connection: &Connection) -> els_types::AppResult<()>
         .map_err(sqlite_error)?;
     connection
         .execute_batch(CREATE_SEGMENT_LABEL_HISTORY_TABLE)
+        .map_err(sqlite_error)?;
+    connection
+        .execute_batch(CREATE_VIDEO_NOTE_TABLE)
         .map_err(sqlite_error)?;
 
     for migration in [

@@ -106,6 +106,12 @@ ApplicationWindow {
         videoPlaybackPane.syncPlaybackDependentPanels()
     }
 
+    function seekPlaybackManually(positionSecs) {
+        if (trainingController.hasActiveSession && mediaBridge.isPlaying)
+            trainingController.pauseTraining()
+        return videoPlaybackPane.seekToPosition(positionSecs)
+    }
+
     function textInputHasFocus() {
         var item = activeFocusItem
         return item && item.text !== undefined
@@ -144,6 +150,28 @@ ApplicationWindow {
         trainingController.stopTraining()
         if (segmentBridge.deleteSegment(index) && deletingActive)
             waveformBridge.clearSelection()
+    }
+
+    function createNote(startSecs, endSecs, hasRange) {
+        if (!noteBridge.hasVideo)
+            return false
+        var created = hasRange
+                ? noteBridge.createForRange(startSecs, endSecs)
+                : noteBridge.createAtPosition(startSecs)
+        if (created) {
+            noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
+            subtitleView.showNoteEditor()
+        }
+        return created
+    }
+
+    function navigateToNote(startSecs, endSecs, hasRange) {
+        trainingController.stopTraining()
+        if (hasRange) {
+            segmentBridge.deactivateSegment()
+            waveformBridge.setSelectionRange(startSecs, endSecs)
+        }
+        videoPlaybackPane.seekToPosition(startSecs)
     }
 
     width: 1440
@@ -207,12 +235,23 @@ ApplicationWindow {
         id: subtitleBridge
     }
 
+    NoteBridge {
+        id: noteBridge
+    }
+
     WaveformBridge {
         id: waveformBridge
     }
 
     SegmentBridge {
         id: segmentBridge
+    }
+
+    Connections {
+        target: mediaBridge
+        function onCurrentPositionChanged() {
+            noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
+        }
     }
 
     SelectionTrainingController {
@@ -371,13 +410,17 @@ ApplicationWindow {
                     mediaBridge: mediaBridge
                     subtitleBridge: subtitleBridge
                     waveformBridge: waveformBridge
-                    onManualSeekRequested: trainingController.stopTraining()
+                    onManualSeekRequested: function(positionSecs) {
+                        root.seekPlaybackManually(positionSecs)
+                    }
                     onNormalPlaybackToggleRequested: root.toggleNormalPlayback()
                     onVideoLoaded: function(path, durationSecs) {
                         trainingController.stopTraining()
                         if (libraryBridge.recordOpenedVideo(path, durationSecs))
                             librarySidebar.revealLearningVideos()
                         segmentBridge.loadForVideoPath(path, durationSecs)
+                        noteBridge.loadForVideoPath(path, durationSecs)
+                        noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
                     }
                     onFullScreenToggleRequested: {
                         root.setVideoFullScreen(!root.videoFullScreen)
@@ -401,11 +444,13 @@ ApplicationWindow {
                                          && segmentBridge.activeEnd
                                             < waveformBridge.durationSecs
                     onPlaybackPositionRequested: function(positionSecs) {
-                        trainingController.stopTraining()
-                        videoPlaybackPane.seekToPosition(positionSecs)
+                        root.seekPlaybackManually(positionSecs)
                     }
                     onSelectionCleared: segmentBridge.deactivateSegment()
                     onNextSegmentRequested: root.beginNextSegment()
+                    onNoteCreationRequested: function(startSecs, endSecs, hasRange) {
+                        root.createNote(startSecs, endSecs, hasRange)
+                    }
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg
                     borderColor: theme.border
@@ -453,10 +498,15 @@ ApplicationWindow {
                 orientation: Qt.Vertical
 
                 SubtitleView {
+                    id: subtitleView
                     SplitView.minimumHeight: 360
                     SplitView.preferredHeight: 520
                     subtitleBridge: subtitleBridge
+                    noteBridge: noteBridge
                     waveformBridge: waveformBridge
+                    onNoteNavigationRequested: function(startSecs, endSecs, hasRange) {
+                        root.navigateToNote(startSecs, endSecs, hasRange)
+                    }
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg
                     borderColor: theme.border
@@ -478,6 +528,9 @@ ApplicationWindow {
                     }
                     onLabelPlaybackRequested: function(index) {
                         root.startLabelTraining(index)
+                    }
+                    onNoteCreationRequested: function(startSecs, endSecs) {
+                        root.createNote(startSecs, endSecs, true)
                     }
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg
