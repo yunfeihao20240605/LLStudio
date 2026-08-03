@@ -31,6 +31,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "cycleThemeMode"]
         fn cycle_theme_mode(self: Pin<&mut ThemeBridge>) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "reportError"]
+        fn report_error(self: Pin<&mut ThemeBridge>, message: &QString) -> bool;
     }
 }
 
@@ -120,6 +124,11 @@ impl qobject::ThemeBridge {
         let next_mode_qstring = QString::from(next_mode);
         let _ = self.as_mut().apply_theme_mode(&next_mode_qstring);
         next_mode_qstring
+    }
+
+    fn report_error(mut self: Pin<&mut Self>, message: &QString) -> bool {
+        self.as_mut().set_last_error(QString::from(message.to_string()));
+        true
     }
 }
 

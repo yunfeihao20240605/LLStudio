@@ -6,6 +6,8 @@ members = [
     "crates/els-waveform-core",
     "crates/els-subtitle-core",
     "crates/els-note-core",
+    "crates/els-recording-core",
+    "crates/els-audio-capture",
     "crates/els-learning-core",
     "crates/els-storage",
     "crates/els-qt-bridge",

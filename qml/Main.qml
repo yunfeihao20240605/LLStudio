@@ -239,6 +239,10 @@ ApplicationWindow {
         id: noteBridge
     }
 
+    RecordingBridge {
+        id: recordingBridge
+    }
+
     WaveformBridge {
         id: waveformBridge
     }
@@ -251,6 +255,26 @@ ApplicationWindow {
         target: mediaBridge
         function onCurrentPositionChanged() {
             noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
+        }
+    }
+
+    Connections {
+        target: waveformBridge
+        function onSelectionRevisionChanged() {
+            var hasRange = waveformBridge.hasSelectionStart
+                    && waveformBridge.hasSelectionEnd
+                    && waveformBridge.selectionEnd > waveformBridge.selectionStart
+            recordingBridge.syncTargetRange(waveformBridge.selectionStart,
+                                            waveformBridge.selectionEnd,
+                                            hasRange)
+        }
+    }
+
+    Connections {
+        target: waveformBridge
+        function onHasErrorChanged() {
+            if (waveformBridge.hasError)
+                themeBridge.reportError(waveformBridge.statusMessage)
         }
     }
 
@@ -341,6 +365,10 @@ ApplicationWindow {
         Menu {
             title: "工具"
             Action { text: "主题切换" }
+            Action {
+                text: "波形状态…"
+                onTriggered: waveformStatusDialog.open()
+            }
         }
         Menu {
             title: "帮助"
@@ -421,6 +449,14 @@ ApplicationWindow {
                         segmentBridge.loadForVideoPath(path, durationSecs)
                         noteBridge.loadForVideoPath(path, durationSecs)
                         noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
+                        recordingBridge.loadForVideoPath(path, durationSecs)
+                        recordingBridge.syncTargetRange(
+                                    waveformBridge.selectionStart,
+                                    waveformBridge.selectionEnd,
+                                    waveformBridge.hasSelectionStart
+                                    && waveformBridge.hasSelectionEnd
+                                    && waveformBridge.selectionEnd
+                                       > waveformBridge.selectionStart)
                     }
                     onFullScreenToggleRequested: {
                         root.setVideoFullScreen(!root.videoFullScreen)
@@ -437,9 +473,10 @@ ApplicationWindow {
                 WaveformView {
                     visible: !root.videoFullScreen
                     SplitView.minimumHeight: 240
-                    SplitView.preferredHeight: 290
+                    SplitView.preferredHeight: recordingBridge.hasRecording ? 380 : 290
                     subtitleBridge: subtitleBridge
                     waveformBridge: waveformBridge
+                    recordingBridge: recordingBridge
                     canBeginNextSegment: segmentBridge.activeIndex >= 0
                                          && segmentBridge.activeEnd
                                             < waveformBridge.durationSecs
@@ -451,6 +488,14 @@ ApplicationWindow {
                     onNoteCreationRequested: function(startSecs, endSecs, hasRange) {
                         root.createNote(startSecs, endSecs, hasRange)
                     }
+                    onRecordingStartRequested: {
+                        trainingController.stopTraining()
+                        mediaBridge.pause()
+                        videoPlaybackPane.syncPlaybackDependentPanels()
+                        recordingBridge.startRecording()
+                    }
+                    onRecordingStopRequested: recordingBridge.stopRecording()
+                    onRecordingDeleteRequested: recordingBridge.deleteRecording()
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg
                     borderColor: theme.border
@@ -560,6 +605,55 @@ ApplicationWindow {
             color: "#c03d3d"
             wrapMode: Text.Wrap
             font.pixelSize: 13
+        }
+    }
+
+    Dialog {
+        id: waveformStatusDialog
+        title: "波形状态"
+        modal: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 520
+        height: 220
+
+        background: Rectangle {
+            color: theme.panelBg
+            border.color: theme.border
+            border.width: 1
+            radius: 8
+        }
+
+        header: Label {
+            text: "波形状态"
+            color: theme.textPrimary
+            font.pixelSize: 15
+            padding: 12
+            background: Rectangle {
+                color: theme.elevatedBg
+                radius: 8
+            }
+        }
+
+        contentItem: ScrollView {
+            clip: true
+            TextArea {
+                readOnly: true
+                wrapMode: Text.Wrap
+                text: waveformBridge ? waveformBridge.statusMessage : ""
+                color: theme.textPrimary
+                font.pixelSize: 13
+                background: null
+                padding: 12
+            }
+        }
+
+        footer: DialogButtonBox {
+            Button {
+                text: "关闭"
+                onClicked: waveformStatusDialog.close()
+            }
         }
     }
 }

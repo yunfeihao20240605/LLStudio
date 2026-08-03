@@ -54,6 +54,21 @@ CREATE TABLE IF NOT EXISTS video_note (
 CREATE INDEX IF NOT EXISTS idx_video_note_time
     ON video_note(video_id, start_time, id);";
 
+pub const CREATE_RECORDING_TABLE: &str = "\
+CREATE TABLE IF NOT EXISTS recording (
+    id INTEGER PRIMARY KEY,
+    video_id INTEGER NOT NULL,
+    range_start REAL NOT NULL,
+    range_end REAL NOT NULL,
+    file_path TEXT NOT NULL,
+    duration REAL NOT NULL,
+    sample_rate INTEGER NOT NULL,
+    alignment_offset REAL NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recording_range
+    ON recording(video_id, range_start, range_end, created_at DESC);";
+
 pub const CREATE_SETTINGS_TABLE: &str = "\
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

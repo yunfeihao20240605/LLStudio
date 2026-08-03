@@ -1,0 +1,8 @@
+[package]
+name = "els-recording-core"
+version.workspace = true
+edition.workspace = true
+description = "跟读录音的领域模型、状态机与持久化端口。"
+
+[dependencies]
+els-types = { path = "../els-types" }

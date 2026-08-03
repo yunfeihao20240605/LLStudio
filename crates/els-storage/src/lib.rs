@@ -10,12 +10,14 @@
 
 mod library;
 mod note;
+mod recording;
 mod schema;
 mod settings;
 mod sqlite;
 
 pub use library::{LearningVideo, VideoLibraryRepository, VideoList};
 pub use note::SqliteNoteRepository;
+pub use recording::SqliteRecordingRepository;
 pub use settings::SettingsStore;
 pub use settings::THEME_MODE_KEY;
 pub use sqlite::SqliteSegmentRepository;

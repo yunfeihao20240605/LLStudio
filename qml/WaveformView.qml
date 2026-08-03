@@ -14,12 +14,16 @@ Rectangle {
     property color accentBg: "#eaf1fe"
     property var subtitleBridge
     property var waveformBridge
+    property var recordingBridge
     property bool canBeginNextSegment: false
     property real zoomFactor: 1.0
     property real minimumZoom: 1.0
     property real maximumZoom: 1000.0
     property real waveformDisplayGain: 1.8
     property bool followPlayback: true
+    readonly property bool comparisonVisible: recordingBridge
+                                              && recordingBridge.hasRecording
+                                              && recordingBridge.recordingPeakValues.length > 0
     readonly property real waveformBackgroundLuminance: elevatedBg.r * 0.2126 + elevatedBg.g * 0.7152 + elevatedBg.b * 0.0722
     readonly property color playheadColor: waveformBackgroundLuminance > 0.55 ? "#111827" : "#ffffff"
     readonly property color playheadTextColor: waveformBackgroundLuminance > 0.55 ? "#ffffff" : "#111827"
@@ -31,6 +35,9 @@ Rectangle {
     signal noteCreationRequested(real startSecs, real endSecs, bool hasRange)
     signal selectionCleared()
     signal nextSegmentRequested()
+    signal recordingStartRequested()
+    signal recordingStopRequested()
+    signal recordingDeleteRequested()
 
     function formatSeconds(totalSeconds) {
         var safe = Math.max(0, Math.floor(totalSeconds || 0))
@@ -117,6 +124,29 @@ Rectangle {
         })
     }
 
+    function revealRecordingRange() {
+        if (!recordingBridge || !recordingBridge.hasRecording)
+            return
+        var rangeDuration = Math.max(0.01,
+                                     recordingBridge.targetEnd
+                                     - recordingBridge.targetStart)
+        var targetZoom = clamp(durationSecs() * 0.72 / rangeDuration,
+                               minimumZoom, maximumZoom)
+        zoomFactor = Math.max(zoomFactor, targetZoom)
+        followPlayback = false
+        Qt.callLater(function() {
+            var center = (recordingBridge.targetStart
+                          + recordingBridge.targetEnd) / 2
+            var maximumX = Math.max(0, waveformFlickable.contentWidth
+                                    - waveformFlickable.width)
+            waveformFlickable.contentX = clamp(
+                        timeToContentX(center) - waveformFlickable.width / 2,
+                        0, maximumX)
+            root.requestWaveformPaint()
+            recordingTrack.requestPaint()
+        })
+    }
+
     function resetViewport() {
         followPlayback = true
         zoomFactor = minimumZoom
@@ -143,6 +173,14 @@ Rectangle {
             waveformCanvas.requestPaint()
     }
 
+    function formatRecordingTime(totalSeconds) {
+        var safe = Math.max(0, totalSeconds || 0)
+        var minutes = Math.floor(safe / 60)
+        var seconds = safe - minutes * 60
+        return (minutes < 10 ? "0" + minutes : minutes) + ":"
+                + (seconds < 10 ? "0" : "") + seconds.toFixed(1)
+    }
+
     function scheduleDetailRequest() {
         if (zoomFactor >= 200 && waveformBridge)
             detailRequestTimer.restart()
@@ -155,6 +193,11 @@ Rectangle {
     onZoomFactorChanged: {
         requestWaveformPaint()
         scheduleDetailRequest()
+    }
+    onComparisonVisibleChanged: {
+        requestWaveformPaint()
+        if (comparisonVisible)
+            revealRecordingRange()
     }
 
     radius: 16
@@ -170,6 +213,14 @@ Rectangle {
             if (waveformBridge)
                 waveformBridge.pollBackgroundTask()
         }
+    }
+
+    Timer {
+        interval: 80
+        repeat: true
+        running: recordingBridge
+                 && (recordingBridge.isRecording || recordingBridge.isProcessing)
+        onTriggered: recordingBridge.pollBackgroundTask()
     }
 
     Timer {
@@ -373,6 +424,12 @@ Rectangle {
                     readonly property real currentTickInterval: root.tickInterval()
                     readonly property real firstVisibleTick: Math.ceil(root.visibleStart() / currentTickInterval) * currentTickInterval
                     readonly property int visibleTickCount: Math.max(0, Math.ceil((root.visibleEnd() - firstVisibleTick) / currentTickInterval) + 1)
+                    readonly property real trackTop: 30
+                    readonly property real trackBottom: height - 44
+                    readonly property real trackHeight: comparisonVisible
+                                                        ? (trackBottom - trackTop) / 2
+                                                        : trackBottom - trackTop
+                    readonly property real originalCenterY: trackTop + trackHeight / 2
 
                     Repeater {
                         model: waveformContent.visibleTickCount
@@ -404,9 +461,9 @@ Rectangle {
                     Rectangle {
                         visible: showSelectionCheckBox.checked && root.selectionIsValid()
                         x: root.timeToContentX(selectionStart())
-                        y: 26
+                        y: waveformContent.trackTop
                         width: root.timeToContentX(selectionEnd()) - x
-                        height: waveformContent.height - 78
+                        height: waveformContent.trackBottom - waveformContent.trackTop
                         color: Qt.rgba(accent.r, accent.g, accent.b, 0.14)
                         border.color: Qt.rgba(accent.r, accent.g, accent.b, 0.5)
                     }
@@ -455,12 +512,25 @@ Rectangle {
                             var lastBin = Math.min(totalBins, Math.ceil((rangeEnd - dataStart) / secondsPerBin))
                             var visibleBins = Math.max(1, lastBin - firstBin)
                             var binsPerPixel = visibleBins / Math.max(1, width)
-                            var centerY = height / 2
-                            var amplitudeHeight = Math.max(1, height - 92) * 0.5
+                            var centerY = waveformContent.originalCenterY
+                            var amplitudeHeight = Math.max(1,
+                                    waveformContent.trackHeight * 0.42)
                             var loadedCount = useDetail ? totalBins : waveformBridge.loadedBinCount
                             var selectionVisible = showSelectionCheckBox.checked
                                     && root.selectionIsValid()
                             var unloadedColor = Qt.rgba(0.81, 0.83, 0.86, 0.35)
+                            var maximumVisiblePeak = 0
+                            for (var peakIndex = firstBin; peakIndex < lastBin; ++peakIndex) {
+                                maximumVisiblePeak = Math.max(
+                                            maximumVisiblePeak,
+                                            Math.abs(peaks[peakIndex * 2]),
+                                            Math.abs(peaks[peakIndex * 2 + 1]))
+                            }
+                            var basePeak = maximumVisiblePeak * root.waveformDisplayGain
+                            var autoGain = basePeak > 0.0001
+                                    ? Math.max(1, Math.min(16, 0.78 / basePeak))
+                                    : 1
+                            var renderGain = root.waveformDisplayGain * autoGain
 
                             function barColor(binStart, binEnd) {
                                 if (binEnd > loadedCount)
@@ -473,9 +543,9 @@ Rectangle {
 
                             function drawBar(x, barWidth, minAmplitude, maxAmplitude, color) {
                                 var safeMin = Math.max(-1, Math.min(0,
-                                                                   minAmplitude * root.waveformDisplayGain))
+                                                                   minAmplitude * renderGain))
                                 var safeMax = Math.max(0, Math.min(1,
-                                                                  maxAmplitude * root.waveformDisplayGain))
+                                                                  maxAmplitude * renderGain))
                                 var top = centerY - safeMax * amplitudeHeight
                                 var bottom = centerY - safeMin * amplitudeHeight
                                 context.fillStyle = color
@@ -523,20 +593,68 @@ Rectangle {
                     Rectangle {
                         id: waveformMidline
                         x: 0
-                        y: waveformContent.height / 2
+                        y: waveformContent.originalCenterY
                         width: waveformContent.width
                         height: 1
                         color: borderColor
                     }
 
                     Rectangle {
+                        visible: root.comparisonVisible
+                        x: 0
+                        y: waveformContent.trackTop + waveformContent.trackHeight
+                        width: waveformContent.width
+                        height: 1
+                        color: root.borderColor
+                    }
+
+                    Text {
+                        visible: root.comparisonVisible
+                        x: waveformFlickable.contentX + 8
+                        y: waveformContent.trackTop + 5
+                        text: "原音"
+                        color: root.textSecondary
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+
+                    RecordingWaveformTrack {
+                        id: recordingTrack
+                        z: 4
+                        visible: root.comparisonVisible
+                        x: waveformFlickable.contentX
+                        y: waveformContent.trackTop + waveformContent.trackHeight
+                        width: waveformFlickable.width
+                        height: waveformContent.trackHeight
+                        recordingBridge: root.recordingBridge
+                        visibleStart: root.visibleStart()
+                        visibleEnd: root.visibleEnd()
+                        displayGain: root.waveformDisplayGain
+                        borderColor: root.borderColor
+                        textColor: root.textPrimary
+                        highlightColor: root.accent
+                        onSeekRequested: function(positionSecs) {
+                            root.playbackPositionRequested(positionSecs)
+                        }
+                        onAlignmentCommitRequested: function(offsetSecs) {
+                            if (root.recordingBridge)
+                                root.recordingBridge.saveAlignmentOffset(offsetSecs)
+                        }
+                        onResetAlignmentRequested: {
+                            if (root.recordingBridge)
+                                root.recordingBridge.resetAlignment()
+                        }
+                        onDeleteRequested: root.recordingDeleteRequested()
+                    }
+
+                    Rectangle {
                         id: selectionStartMarker
-                        z: 3
+                        z: 6
                         visible: showSelectionCheckBox.checked && waveformBridge && waveformBridge.hasSelectionStart
                         x: root.clamp(root.timeToContentX(waveformBridge ? waveformBridge.selectionStart : 0) - width / 2, 0, waveformContent.width - width)
-                        y: 26
+                        y: waveformContent.trackTop
                         width: 3
-                        height: waveformContent.height - 78
+                        height: waveformContent.trackBottom - waveformContent.trackTop
                         color: root.selectionStartMarkerColor
 
                         Rectangle {
@@ -588,12 +706,12 @@ Rectangle {
 
                     Rectangle {
                         id: selectionEndMarker
-                        z: 3
+                        z: 6
                         visible: showSelectionCheckBox.checked && waveformBridge && waveformBridge.hasSelectionEnd
                         x: root.clamp(root.timeToContentX(waveformBridge ? waveformBridge.selectionEnd : 0) - width / 2, 0, waveformContent.width - width)
-                        y: 26
+                        y: waveformContent.trackTop
                         width: 3
-                        height: waveformContent.height - 78
+                        height: waveformContent.trackBottom - waveformContent.trackTop
                         color: root.selectionEndMarkerColor
 
                         Rectangle {
@@ -644,6 +762,7 @@ Rectangle {
                     }
 
                     Rectangle {
+                        z: 5
                         x: root.timeToContentX(waveformBridge ? waveformBridge.currentPosition : 0)
                         y: 22
                         width: 3
@@ -652,6 +771,7 @@ Rectangle {
                     }
 
                     Rectangle {
+                        z: 7
                         x: root.clamp(root.timeToContentX(waveformBridge ? waveformBridge.currentPosition : 0) - 22, 0, waveformContent.width - width)
                         y: 12
                         width: 56
@@ -725,6 +845,27 @@ Rectangle {
             }
 
             Button {
+                visible: root.recordingBridge && root.recordingBridge.hasVideo
+                enabled: root.recordingBridge
+                         && root.recordingBridge.hasTarget
+                         && !root.recordingBridge.isProcessing
+                text: root.recordingBridge && root.recordingBridge.isRecording
+                      ? "■  停止 " + root.formatRecordingTime(
+                            root.recordingBridge.recordingElapsed)
+                      : (root.recordingBridge && root.recordingBridge.isProcessing
+                         ? "处理中" : "●  录音")
+                onClicked: {
+                    if (root.recordingBridge.isRecording)
+                        root.recordingStopRequested()
+                    else
+                        root.recordingStartRequested()
+                }
+                ToolTip.visible: hovered
+                ToolTip.text: root.recordingBridge
+                              ? root.recordingBridge.statusMessage : ""
+            }
+
+            Button {
                 Layout.preferredWidth: 92
                 text: waveformBridge && waveformBridge.hasSelectionStart
                       ? "A " + formatSeconds(waveformBridge.selectionStart)
@@ -757,15 +898,6 @@ Rectangle {
                 }
             }
 
-        }
-
-        Text {
-            Layout.fillWidth: true
-            visible: waveformBridge && waveformBridge.statusMessage.length > 0
-            text: waveformBridge ? waveformBridge.statusMessage : ""
-            color: textSecondary
-            font.pixelSize: 12
-            elide: Text.ElideRight
         }
     }
 }

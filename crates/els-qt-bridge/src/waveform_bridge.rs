@@ -33,6 +33,7 @@ pub mod qobject {
         #[qproperty(i32, selection_revision, cxx_name = "selectionRevision")]
         #[qproperty(bool, is_loading, cxx_name = "isLoading")]
         #[qproperty(QString, status_message, cxx_name = "statusMessage")]
+        #[qproperty(bool, has_error, cxx_name = "hasError")]
         #[qproperty(QVector_f32, detail_peak_values, cxx_name = "detailPeakValues")]
         #[qproperty(f64, detail_start, cxx_name = "detailStart")]
         #[qproperty(f64, detail_end, cxx_name = "detailEnd")]
@@ -118,6 +119,7 @@ pub struct WaveformBridgeRust {
     selection_revision: i32,
     is_loading: bool,
     status_message: QString,
+    has_error: bool,
     detail_peak_values: QVector<f32>,
     detail_start: f64,
     detail_end: f64,
@@ -160,6 +162,7 @@ impl Default for WaveformBridgeRust {
             selection_revision: 1,
             is_loading: false,
             status_message: QString::from("Generated preview waveform"),
+            has_error: false,
             detail_peak_values: QVector::from(Vec::new()),
             detail_start: 0.0,
             detail_end: 0.0,
@@ -281,6 +284,7 @@ impl qobject::WaveformBridge {
         self.as_mut().set_has_selection_end(false);
         self.as_mut().bump_selection_revision();
         self.as_mut().set_is_loading(true);
+        self.as_mut().set_has_error(false);
         self.as_mut()
             .set_status_message(QString::from("Generating preview waveform..."));
         true
@@ -513,6 +517,7 @@ impl qobject::WaveformBridge {
                     self.as_mut().set_total_bin_count(total_bin_count);
                     self.as_mut().set_duration_secs(duration_secs);
                     self.as_mut().set_status_message(QString::from(&status));
+                    self.as_mut().set_has_error(false);
                     self.as_mut().set_is_loading(false);
                     preview_receiver = None;
                     changed = true;
@@ -522,6 +527,7 @@ impl qobject::WaveformBridge {
                     if task_id == self.rust().active_task_id {
                         eprintln!("{error}");
                         self.as_mut().set_status_message(QString::from(&error));
+                        self.as_mut().set_has_error(true);
                         self.as_mut().set_is_loading(false);
                         changed = true;
                     }
@@ -534,6 +540,7 @@ impl qobject::WaveformBridge {
                 Err(TryRecvError::Disconnected) => {
                     self.as_mut()
                         .set_status_message(QString::from("Waveform task stopped unexpectedly"));
+                    self.as_mut().set_has_error(true);
                     self.as_mut().set_is_loading(false);
                     preview_receiver = None;
                     changed = true;

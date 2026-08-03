@@ -1,0 +1,10 @@
+[package]
+name = "els-audio-capture"
+version.workspace = true
+edition.workspace = true
+description = "基于 cpal 的麦克风采集与 WAV 文件适配器。"
+
+[dependencies]
+cpal = "0.15.3"
+hound = "3.5.1"
+els-types = { path = "../els-types" }
