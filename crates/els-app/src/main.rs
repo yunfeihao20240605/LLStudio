@@ -10,7 +10,7 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQmlEngine, QUrl};
 use std::pin::Pin;
 
 fn main() {
-    force_c_numeric_locale();
+    configure_process_environment();
     els_qt_bridge::graphics_backend::force_opengl_backend();
 
     cxx_qt::init_crate!(els_qt_bridge);
@@ -40,16 +40,18 @@ fn main() {
     }
 }
 
-fn force_c_numeric_locale() {
-    std::env::set_var("LC_ALL", "C");
+fn configure_process_environment() {
+    std::env::set_var("LC_ALL", "C.UTF-8");
     std::env::set_var("LC_NUMERIC", "C");
-    std::env::set_var("LANG", "C");
+    std::env::set_var("LANG", "C.UTF-8");
+    std::env::set_var("QT_QUICK_CONTROLS_STYLE", "Basic");
 
     unsafe {
-        libc::setenv(c"LC_ALL".as_ptr(), c"C".as_ptr(), 1);
+        libc::setenv(c"LC_ALL".as_ptr(), c"C.UTF-8".as_ptr(), 1);
         libc::setenv(c"LC_NUMERIC".as_ptr(), c"C".as_ptr(), 1);
-        libc::setenv(c"LANG".as_ptr(), c"C".as_ptr(), 1);
-        libc::setlocale(libc::LC_ALL, c"C".as_ptr());
+        libc::setenv(c"LANG".as_ptr(), c"C.UTF-8".as_ptr(), 1);
+        libc::setenv(c"QT_QUICK_CONTROLS_STYLE".as_ptr(), c"Basic".as_ptr(), 1);
+        libc::setlocale(libc::LC_ALL, c"C.UTF-8".as_ptr());
         libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr());
     }
 }

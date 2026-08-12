@@ -13,11 +13,16 @@ mod note;
 mod recording;
 mod schema;
 mod settings;
+mod speech_settings;
 mod sqlite;
 
 pub use library::{LearningVideo, VideoLibraryRepository, VideoList};
 pub use note::SqliteNoteRepository;
 pub use recording::SqliteRecordingRepository;
-pub use settings::SettingsStore;
 pub use settings::THEME_MODE_KEY;
+pub use settings::{
+    AiSettingsRepository, SettingsStore, AI_API_KEY_KEY, AI_BASE_URL_KEY, AI_MODEL_KEY,
+    AI_SYSTEM_PROMPT_KEY,
+};
 pub use sqlite::SqliteSegmentRepository;
+pub use speech_settings::{SpeechProviderProfile, SpeechSettingsRepository};

@@ -1,0 +1,9 @@
+[package]
+name = "els-ai-core"
+version.workspace = true
+edition.workspace = true
+description = "协议无关的 AI 对话模型与 OpenAI 兼容请求核心。"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

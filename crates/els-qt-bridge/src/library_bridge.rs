@@ -38,6 +38,18 @@ pub mod qobject {
         ) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "lastPlaybackPosition"]
+        fn last_playback_position(&self, path: &QString) -> f64;
+
+        #[qinvokable]
+        #[cxx_name = "savePlaybackPosition"]
+        fn save_playback_position(
+            self: Pin<&mut LibraryBridge>,
+            path: &QString,
+            position_secs: f64,
+        ) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "refresh"]
         fn refresh(self: Pin<&mut LibraryBridge>) -> bool;
 
@@ -247,6 +259,29 @@ impl qobject::LibraryBridge {
         }
 
         self.as_mut().refresh()
+    }
+
+    fn last_playback_position(&self, path: &QString) -> f64 {
+        self.rust()
+            .repository
+            .last_position(&path.to_string())
+            .unwrap_or(0.0)
+    }
+
+    fn save_playback_position(
+        mut self: Pin<&mut Self>,
+        path: &QString,
+        position_secs: f64,
+    ) -> bool {
+        let result = self
+            .as_mut()
+            .rust_mut()
+            .repository
+            .save_last_position(&path.to_string(), position_secs);
+        if let Err(err) = result {
+            return self.as_mut().report_error("保存播放位置失败", err);
+        }
+        true
     }
 
     fn refresh(mut self: Pin<&mut Self>) -> bool {

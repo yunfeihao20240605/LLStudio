@@ -1,10 +1,12 @@
 //! 跟读录音的核心模型、状态机和持久化端口。
 
 mod manager;
+mod playback;
 mod recording;
 mod session;
 
 pub use manager::{clamp_alignment_offset, DefaultRecordingManager, RecordingManager};
+pub use playback::RecordingPlaybackTimeline;
 pub use recording::{NewRecording, Recording};
 pub use session::{RecordingSession, RecordingState};
 

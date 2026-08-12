@@ -1,10 +1,14 @@
 //! 用户偏好设置存取实现（例如 3.3 节的主题模式 light/dark/auto）。
 
-use crate::schema::CREATE_SETTINGS_TABLE;
+use crate::schema::{CREATE_AI_CONVERSATIONS_TABLE, CREATE_SETTINGS_TABLE};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 
 pub const THEME_MODE_KEY: &str = "theme_mode";
+pub const AI_BASE_URL_KEY: &str = "ai.base_url";
+pub const AI_API_KEY_KEY: &str = "ai.api_key";
+pub const AI_MODEL_KEY: &str = "ai.model";
+pub const AI_SYSTEM_PROMPT_KEY: &str = "ai.system_prompt";
 
 const DEFAULT_DB_FILE_NAME: &str = "english-learning-studio.sqlite3";
 
@@ -71,6 +75,101 @@ impl SettingsStore {
     }
 }
 
+pub struct AiSettingsRepository {
+    store: SettingsStore,
+}
+
+impl AiSettingsRepository {
+    pub fn open_default() -> els_types::AppResult<Self> {
+        Ok(Self {
+            store: SettingsStore::open_default()?,
+        })
+    }
+
+    pub fn disabled() -> Self {
+        Self {
+            store: SettingsStore::disabled(),
+        }
+    }
+
+    pub fn load(&self) -> els_types::AppResult<els_ai_core::AiConfig> {
+        let get = |key: &str| Ok(self.store.get(key)?.unwrap_or_default());
+        Ok(els_ai_core::AiConfig {
+            protocol: els_ai_core::AiProtocol::OpenAiCompatible,
+            base_url: get(AI_BASE_URL_KEY)?,
+            api_key: get(AI_API_KEY_KEY)?,
+            model: get(AI_MODEL_KEY)?,
+            system_prompt: get(AI_SYSTEM_PROMPT_KEY)?,
+        })
+    }
+
+    pub fn save(&mut self, config: &els_ai_core::AiConfig) -> els_types::AppResult<()> {
+        self.store.set(AI_BASE_URL_KEY, &config.base_url)?;
+        self.store.set(AI_API_KEY_KEY, &config.api_key)?;
+        self.store.set(AI_MODEL_KEY, &config.model)?;
+        self.store.set(AI_SYSTEM_PROMPT_KEY, &config.system_prompt)
+    }
+
+    pub fn load_conversation(
+        &self,
+        video_path: &str,
+        cue_index: i32,
+    ) -> els_types::AppResult<Vec<els_ai_core::ChatMessage>> {
+        let connection = self.store.connection()?;
+        let json = connection
+            .query_row(
+                "SELECT messages_json FROM ai_conversations
+                 WHERE video_path = ?1 AND cue_index = ?2",
+                params![video_path, cue_index],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(sqlite_error)?;
+        match json {
+            Some(value) => serde_json::from_str(&value)
+                .map_err(|error| els_types::AppError::Io(error.to_string())),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn save_conversation(
+        &mut self,
+        video_path: &str,
+        cue_index: i32,
+        messages: &[els_ai_core::ChatMessage],
+    ) -> els_types::AppResult<()> {
+        let json = serde_json::to_string(messages)
+            .map_err(|error| els_types::AppError::Io(error.to_string()))?;
+        let connection = self.store.connection()?;
+        connection
+            .execute(
+                "INSERT INTO ai_conversations (video_path, cue_index, messages_json, updated_at)
+                 VALUES (?1, ?2, ?3, strftime('%s', 'now'))
+                 ON CONFLICT(video_path, cue_index) DO UPDATE SET
+                    messages_json = excluded.messages_json,
+                    updated_at = excluded.updated_at",
+                params![video_path, cue_index, json],
+            )
+            .map_err(sqlite_error)?;
+        Ok(())
+    }
+
+    pub fn delete_conversation(
+        &mut self,
+        video_path: &str,
+        cue_index: i32,
+    ) -> els_types::AppResult<()> {
+        let connection = self.store.connection()?;
+        connection
+            .execute(
+                "DELETE FROM ai_conversations WHERE video_path = ?1 AND cue_index = ?2",
+                params![video_path, cue_index],
+            )
+            .map_err(sqlite_error)?;
+        Ok(())
+    }
+}
+
 impl Default for SettingsStore {
     fn default() -> Self {
         match Self::open_default() {
@@ -86,6 +185,7 @@ impl Default for SettingsStore {
 fn ensure_schema(connection: &Connection) -> els_types::AppResult<()> {
     connection
         .execute_batch(CREATE_SETTINGS_TABLE)
+        .and_then(|_| connection.execute_batch(CREATE_AI_CONVERSATIONS_TABLE))
         .map_err(sqlite_error)
 }
 

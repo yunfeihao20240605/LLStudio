@@ -145,9 +145,7 @@ impl qobject::SubtitleBridge {
         let cue_index = self
             .rust()
             .track
-            .cues()
-            .iter()
-            .position(|cue| position >= cue.range.start && position < cue.range.end)
+            .cue_index_at(position)
             .map(|index| index as i32)
             .unwrap_or(-1);
         self.as_mut().set_active_cue(cue_index);

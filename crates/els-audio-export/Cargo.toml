@@ -1,0 +1,9 @@
+[package]
+name = "els-audio-export"
+version.workspace = true
+edition.workspace = true
+description = "从视频选区导出语音识别所需音频。"
+
+[dependencies]
+els-types = { path = "../els-types" }
+els-speech-core = { path = "../els-speech-core" }

@@ -1,5 +1,4 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 Rectangle {
@@ -9,6 +8,9 @@ Rectangle {
     property color borderColor: "#d0d7de"
     property color textPrimary: "#1f2329"
     property color textSecondary: "#6b7280"
+    property string statusMessage: ""
+    property bool statusIsError: false
+    property bool statusIsSuccess: false
 
     radius: 10
     color: panelBg
@@ -21,9 +23,13 @@ Rectangle {
         anchors.rightMargin: 12
 
         Text {
-            text: "就绪"
-            color: textSecondary
+            text: root.statusMessage.length > 0 ? root.statusMessage : "就绪"
+            color: root.statusIsError ? "#c03d3d"
+                   : (root.statusIsSuccess ? "#238636" : root.textSecondary)
             font.pixelSize: 12
+            font.bold: root.statusIsError || root.statusIsSuccess
+            elide: Text.ElideRight
+            Layout.maximumWidth: 420
         }
 
         Item {
@@ -32,13 +38,13 @@ Rectangle {
 
         Text {
             text: "视频：1920x1080   30fps"
-            color: textSecondary
+            color: root.textSecondary
             font.pixelSize: 12
         }
 
         Text {
             text: "音频：48kHz   立体声"
-            color: textSecondary
+            color: root.textSecondary
             font.pixelSize: 12
         }
 
@@ -47,7 +53,7 @@ Rectangle {
             Layout.preferredHeight: 24
             radius: 8
             color: "transparent"
-            border.color: borderColor
+            border.color: root.borderColor
 
             Row {
                 anchors.centerIn: parent
@@ -55,13 +61,13 @@ Rectangle {
 
                 Text {
                     text: "⛁"
-                    color: textSecondary
+                    color: root.textSecondary
                     font.pixelSize: 12
                 }
 
                 Text {
                     text: "数据库已连接"
-                    color: textSecondary
+                    color: root.textSecondary
                     font.pixelSize: 12
                 }
             }

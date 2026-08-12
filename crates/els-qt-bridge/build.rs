@@ -10,12 +10,16 @@ fn main() {
         .qt_module("Quick")
         .files([
             "src/app_bootstrap.rs",
+            "src/ai_tutor_bridge.rs",
             "src/theme_bridge.rs",
             "src/library_bridge.rs",
             "src/media_bridge.rs",
             "src/note_bridge.rs",
             "src/recording_bridge.rs",
+            "src/recording_playback_bridge.rs",
             "src/segment_bridge.rs",
+            "src/speech_recognition_bridge.rs",
+            "src/speech_settings_bridge.rs",
             "src/subtitle_bridge.rs",
             "src/waveform_bridge.rs",
         ])

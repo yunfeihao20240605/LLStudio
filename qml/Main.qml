@@ -2,15 +2,21 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import Qt.labs.platform 1.1 as Platform
 
 import "theme" as ThemeComponents
 import com.yfhao.els.bridge 1.0
 
 ApplicationWindow {
     id: root
+    property string successMessage: ""
+    property int pendingSegmentIndex: -1
 
     property bool videoFullScreen: false
     property int visibilityBeforeVideoFullScreen: Window.Windowed
+    property bool deferRecordingTargetSync: false
+    property int segmentActivationRevision: 0
+    property int pendingReadySegmentIndex: -1
 
     function setVideoFullScreen(enabled) {
         if (videoFullScreen === enabled)
@@ -28,19 +34,30 @@ ApplicationWindow {
 
     function startOrContinueTraining(repeatCount, intervalSeconds) {
         if (trainingController.hasActiveSession) {
-            if (mediaBridge.isPlaying) {
+            var sourceIsPlaying = trainingController.isRecordingSession
+                    ? recordingPlaybackBridge.isPlaying : mediaBridge.isPlaying
+            if (sourceIsPlaying) {
                 if (trainingController.isTraining)
                     trainingController.pauseTraining()
                 else {
-                    mediaBridge.pause()
-                    videoPlaybackPane.syncPlaybackDependentPanels()
+                    if (trainingController.isRecordingSession)
+                        recordingPlaybackBridge.pause()
+                    else {
+                        mediaBridge.pause()
+                        videoPlaybackPane.syncPlaybackDependentPanels()
+                    }
                 }
             } else if (!trainingController.resumeTraining()) {
-                mediaBridge.play()
-                videoPlaybackPane.syncPlaybackDependentPanels()
+                if (trainingController.isRecordingSession)
+                    recordingPlaybackBridge.play()
+                else {
+                    mediaBridge.play()
+                    videoPlaybackPane.syncPlaybackDependentPanels()
+                }
             }
             return
         }
+        recordingPlaybackBridge.pause()
         if (segmentBridge.saveCurrentSelection(
                     waveformBridge.selectionStart,
                     waveformBridge.selectionEnd,
@@ -48,6 +65,97 @@ ApplicationWindow {
                     intervalSeconds)) {
             trainingController.startTraining(repeatCount, intervalSeconds)
         }
+    }
+
+    function toggleRecordingTraining() {
+        if (!recordingBridge.hasRecording
+                || !recordingPlaybackBridge.hasRecording)
+            return false
+
+        if (trainingController.hasActiveSession) {
+            if (trainingController.isRecordingSession) {
+                startOrContinueTraining(controlPanel.repeatCount,
+                                        controlPanel.intervalSeconds)
+                return true
+            }
+            trainingController.stopTraining()
+        }
+
+        mediaBridge.pause()
+        videoPlaybackPane.syncPlaybackDependentPanels()
+        recordingPlaybackBridge.applyPlaybackRate(mediaBridge.playbackRate)
+        return trainingController.startRecordingTraining(
+                    recordingPlaybackBridge.duration,
+                    controlPanel.repeatCount,
+                    controlPanel.intervalSeconds)
+    }
+
+    function toggleOriginalTraining() {
+        if (trainingController.isRecordingSession)
+            return switchTrainingSource(controlPanel.repeatCount,
+                                        controlPanel.intervalSeconds)
+        startOrContinueTraining(controlPanel.repeatCount,
+                                controlPanel.intervalSeconds)
+        return true
+    }
+
+    function switchTrainingSource(repeatCount, intervalSeconds) {
+        if (!recordingBridge.hasRecording
+                || !recordingPlaybackBridge.hasRecording)
+            return false
+
+        var switchToRecording = !trainingController.isRecordingSession
+        if (trainingController.hasActiveSession)
+            trainingController.stopTraining()
+
+        if (switchToRecording) {
+            mediaBridge.pause()
+            videoPlaybackPane.syncPlaybackDependentPanels()
+            recordingPlaybackBridge.applyPlaybackRate(mediaBridge.playbackRate)
+            return trainingController.startRecordingTraining(
+                        recordingPlaybackBridge.duration,
+                        repeatCount,
+                        intervalSeconds)
+        }
+
+        recordingPlaybackBridge.pause()
+        if (!segmentBridge.saveCurrentSelection(
+                    waveformBridge.selectionStart,
+                    waveformBridge.selectionEnd,
+                    repeatCount,
+                    intervalSeconds))
+            return false
+        return trainingController.startTraining(repeatCount, intervalSeconds)
+    }
+
+    function syncRecordingPlaybackSource() {
+        if (recordingBridge.hasRecording
+                && recordingBridge.recordingFilePath.length > 0) {
+            if (recordingPlaybackBridge.loadRecording(
+                        recordingBridge.recordingFilePath)) {
+                recordingPlaybackBridge.configureTimeline(
+                            recordingBridge.targetEnd
+                            - recordingBridge.targetStart,
+                            recordingBridge.alignmentOffset)
+                recordingPlaybackBridge.applyPlaybackRate(mediaBridge.playbackRate)
+            }
+        } else {
+            if (trainingController.hasActiveSession
+                    && trainingController.isRecordingSession)
+                trainingController.stopTraining()
+            if (recordingPlaybackBridge.hasRecording
+                    || recordingPlaybackBridge.loadedPath.length > 0)
+                recordingPlaybackBridge.unload()
+        }
+    }
+
+    function syncRecordingTargetFromSelection() {
+        var hasRange = waveformBridge.hasSelectionStart
+                && waveformBridge.hasSelectionEnd
+                && waveformBridge.selectionEnd > waveformBridge.selectionStart
+        recordingBridge.syncTargetRange(waveformBridge.selectionStart,
+                                        waveformBridge.selectionEnd,
+                                        hasRange)
     }
 
     function startLabelTraining(index) {
@@ -95,8 +203,12 @@ ApplicationWindow {
             return
 
         var wasPlaying = mediaBridge.isPlaying
-        if (trainingController.hasActiveSession)
+        if (trainingController.hasActiveSession) {
+            if (trainingController.isRecordingSession
+                    && recordingPlaybackBridge.isPlaying)
+                recordingPlaybackBridge.pause()
             trainingController.cancelTrainingSession()
+        }
 
         if (wasPlaying) {
             mediaBridge.pause()
@@ -109,7 +221,26 @@ ApplicationWindow {
     function seekPlaybackManually(positionSecs) {
         if (trainingController.hasActiveSession && mediaBridge.isPlaying)
             trainingController.pauseTraining()
-        return videoPlaybackPane.seekToPosition(positionSecs)
+        var seeked = videoPlaybackPane.seekToPosition(positionSecs)
+        if (seeked)
+            savePlaybackProgress()
+        return seeked
+    }
+
+    function savePlaybackProgress() {
+        if (!mediaBridge || !libraryBridge
+                || mediaBridge.loadedPath.length === 0
+                || mediaBridge.preparingInitialFrame)
+            return false
+        return libraryBridge.savePlaybackPosition(
+                    mediaBridge.loadedPath,
+                    mediaBridge.currentPosition)
+    }
+
+    function showSuccessMessage(message) {
+        themeBridge.reportError("")
+        successMessage = message
+        successMessageTimer.restart()
     }
 
     function textInputHasFocus() {
@@ -134,15 +265,59 @@ ApplicationWindow {
         return true
     }
 
+    function syncActiveLearningSegment(index) {
+        if (index < 0 || index !== segmentBridge.activeIndex)
+            return false
+
+        var revision = ++segmentActivationRevision
+        root.deferRecordingTargetSync = true
+        waveformBridge.setSelectionRange(segmentBridge.activeStart,
+                                         segmentBridge.activeEnd)
+        subtitleView.syncSelectionEditor()
+        controlPanel.applyTrainingSettings(segmentBridge.activeRepeatCount,
+                                           segmentBridge.activeIntervalSeconds)
+        var seeked = videoPlaybackPane.seekToPosition(segmentBridge.activeStart)
+        pendingReadySegmentIndex = !seeked && mediaBridge.preparingInitialFrame
+                ? index : -1
+        Qt.callLater(function() {
+            if (revision !== root.segmentActivationRevision)
+                return
+            root.deferRecordingTargetSync = false
+            if (index !== segmentBridge.activeIndex)
+                return
+            subtitleView.syncSelectionEditor()
+            root.syncRecordingTargetFromSelection()
+        })
+        return true
+    }
+
     function activateLearningSegment(index) {
         trainingController.stopTraining()
-        if (segmentBridge.activateSegment(index)) {
-            waveformBridge.setSelectionRange(segmentBridge.activeStart,
-                                             segmentBridge.activeEnd)
-            controlPanel.applyTrainingSettings(segmentBridge.activeRepeatCount,
-                                               segmentBridge.activeIntervalSeconds)
-            videoPlaybackPane.seekToPosition(segmentBridge.activeStart)
+        if (!segmentBridge.activateSegment(index))
+            return false
+        return syncActiveLearningSegment(index)
+    }
+
+    function requestActivateLearningSegment(index) {
+        if (unsavedSubtitleDialog.visible)
+            return
+        if (index === segmentBridge.activeIndex) {
+            syncActiveLearningSegment(index)
+            return
         }
+        if (subtitleView.hasUnsavedSubtitleChanges) {
+            pendingSegmentIndex = index
+            unsavedSubtitleDialog.open()
+            return
+        }
+        activateLearningSegment(index)
+    }
+
+    function activatePendingLearningSegment() {
+        var index = pendingSegmentIndex
+        pendingSegmentIndex = -1
+        if (index >= 0)
+            activateLearningSegment(index)
     }
 
     function deleteLearningSegment(index) {
@@ -179,7 +354,9 @@ ApplicationWindow {
     visible: true
     minimumWidth: 1220
     minimumHeight: 760
-    title: "Language Learning Studio"
+    title: "LLStudio"
+
+    onClosing: root.savePlaybackProgress()
 
     Shortcut {
         sequence: "Space"
@@ -231,6 +408,18 @@ ApplicationWindow {
         id: libraryBridge
     }
 
+    AiTutorBridge {
+        id: aiTutorBridge
+    }
+
+    SpeechSettingsBridge {
+        id: speechSettingsBridge
+    }
+
+    SpeechRecognitionBridge {
+        id: speechRecognitionBridge
+    }
+
     SubtitleBridge {
         id: subtitleBridge
     }
@@ -241,6 +430,10 @@ ApplicationWindow {
 
     RecordingBridge {
         id: recordingBridge
+    }
+
+    RecordingPlaybackBridge {
+        id: recordingPlaybackBridge
     }
 
     WaveformBridge {
@@ -256,17 +449,84 @@ ApplicationWindow {
         function onCurrentPositionChanged() {
             noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
         }
+        function onPlaybackRateChanged() {
+            if (recordingPlaybackBridge.hasRecording)
+                recordingPlaybackBridge.applyPlaybackRate(
+                            mediaBridge.playbackRate)
+        }
+        function onIsPlayingChanged() {
+            if (!mediaBridge.isPlaying)
+                root.savePlaybackProgress()
+        }
+        function onPreparingInitialFrameChanged() {
+            if (mediaBridge.preparingInitialFrame
+                    || root.pendingReadySegmentIndex < 0)
+                return
+            var index = root.pendingReadySegmentIndex
+            root.pendingReadySegmentIndex = -1
+            if (index === segmentBridge.activeIndex)
+                root.syncActiveLearningSegment(index)
+        }
+    }
+
+    Connections {
+        target: subtitleBridge
+        function onActiveCueIndexChanged() {
+            if (subtitleBridge.activeCueIndex < 0)
+                return
+            if (!mediaBridge.isPlaying
+                    && subtitleBridge.editingCueIndex >= 0)
+                return
+            aiTutorBridge.setSubtitleContext(
+                        mediaBridge.loadedPath,
+                        subtitleBridge.activeCueIndex,
+                        subtitleBridge.activeCueStart,
+                        subtitleBridge.activeCueEnd,
+                        subtitleBridge.activeOriginalText,
+                        subtitleBridge.activeTranslatedText,
+                        "", "")
+        }
+    }
+
+    Timer {
+        interval: 2000
+        repeat: true
+        running: mediaBridge.isPlaying
+        onTriggered: root.savePlaybackProgress()
+    }
+
+    Timer {
+        id: successMessageTimer
+        interval: 2200
+        repeat: false
+        onTriggered: root.successMessage = ""
+    }
+
+    Timer {
+        id: recordingPlaybackSyncTimer
+        interval: 0
+        repeat: false
+        onTriggered: root.syncRecordingPlaybackSource()
+    }
+
+    Connections {
+        target: recordingBridge
+        function onHasRecordingChanged() {
+            recordingPlaybackSyncTimer.restart()
+        }
+        function onRecordingFilePathChanged() {
+            recordingPlaybackSyncTimer.restart()
+        }
+        function onAlignmentOffsetChanged() {
+            recordingPlaybackSyncTimer.restart()
+        }
     }
 
     Connections {
         target: waveformBridge
         function onSelectionRevisionChanged() {
-            var hasRange = waveformBridge.hasSelectionStart
-                    && waveformBridge.hasSelectionEnd
-                    && waveformBridge.selectionEnd > waveformBridge.selectionStart
-            recordingBridge.syncTargetRange(waveformBridge.selectionStart,
-                                            waveformBridge.selectionEnd,
-                                            hasRange)
+            if (!root.deferRecordingTargetSync)
+                root.syncRecordingTargetFromSelection()
         }
     }
 
@@ -281,7 +541,10 @@ ApplicationWindow {
     SelectionTrainingController {
         id: trainingController
         mediaAvailable: mediaBridge.loadedPath.length > 0 && mediaBridge.duration > 0
-        playbackPosition: mediaBridge.currentPosition
+        recordingAvailable: recordingPlaybackBridge.hasRecording
+        playbackPosition: trainingController.isRecordingSession
+                          ? recordingPlaybackBridge.currentPosition
+                          : mediaBridge.currentPosition
         selectionAvailable: waveformBridge.hasSelectionStart
                             && waveformBridge.hasSelectionEnd
                             && waveformBridge.selectionEnd > waveformBridge.selectionStart
@@ -289,90 +552,122 @@ ApplicationWindow {
         selectionEnd: waveformBridge.selectionEnd
 
         onLoopCompleted: {
-            if (trainingController.isLabelSequence)
-                segmentBridge.recordLabelPlaybackLoop()
-            else if (segmentBridge.activeIndex >= 0)
-                segmentBridge.incrementCompletedLoops()
+            if (!trainingController.isRecordingSession) {
+                if (trainingController.isLabelSequence)
+                    segmentBridge.recordLabelPlaybackLoop()
+                else if (segmentBridge.activeIndex >= 0)
+                    segmentBridge.incrementCompletedLoops()
+            }
         }
 
         onSeekAndPlayRequested: function(positionSecs) {
-            if (videoPlaybackPane.seekToPosition(positionSecs)) {
-                mediaBridge.play()
-                videoPlaybackPane.syncPlaybackDependentPanels()
+            if (trainingController.isRecordingSession) {
+                if (recordingPlaybackBridge.seek(positionSecs))
+                    recordingPlaybackBridge.play()
+            } else {
+                if (videoPlaybackPane.seekToPosition(positionSecs)) {
+                    mediaBridge.play()
+                    videoPlaybackPane.syncPlaybackDependentPanels()
+                }
             }
         }
 
         onPauseRequested: {
-            mediaBridge.pause()
-            videoPlaybackPane.syncPlaybackDependentPanels()
+            if (trainingController.isRecordingSession)
+                recordingPlaybackBridge.pause()
+            else {
+                mediaBridge.pause()
+                videoPlaybackPane.syncPlaybackDependentPanels()
+            }
         }
 
         onPauseAtPositionRequested: function(positionSecs) {
-            mediaBridge.pause()
-            videoPlaybackPane.seekToPosition(positionSecs)
+            if (trainingController.isRecordingSession) {
+                recordingPlaybackBridge.pause()
+                recordingPlaybackBridge.seek(positionSecs)
+            } else {
+                mediaBridge.pause()
+                videoPlaybackPane.seekToPosition(positionSecs)
+            }
         }
 
         onResumePlaybackRequested: {
-            mediaBridge.play()
-            videoPlaybackPane.syncPlaybackDependentPanels()
+            if (trainingController.isRecordingSession)
+                recordingPlaybackBridge.play()
+            else {
+                mediaBridge.play()
+                videoPlaybackPane.syncPlaybackDependentPanels()
+            }
+        }
+    }
+
+    Timer {
+        interval: 33
+        repeat: true
+        running: recordingPlaybackBridge.isPlaying
+        onTriggered: recordingPlaybackBridge.tick()
+    }
+
+    Timer {
+        interval: 100
+        repeat: true
+        running: speechRecognitionBridge.isRecognizing
+        onTriggered: speechRecognitionBridge.poll()
+    }
+
+    Connections {
+        target: speechRecognitionBridge
+        function onResultRevisionChanged() {
+            subtitleView.applyRecognizedText(
+                        speechRecognitionBridge.resultText,
+                        speechRecognitionBridge.resultStart,
+                        speechRecognitionBridge.resultEnd)
+        }
+        function onErrorMessageChanged() {
+            if (speechRecognitionBridge.errorMessage.length > 0)
+                themeBridge.reportError(speechRecognitionBridge.errorMessage)
         }
     }
 
     color: theme.windowBg
 
-    menuBar: MenuBar {
-        visible: !root.videoFullScreen
-        background: Rectangle {
-            color: theme.panelBg
-            border.color: theme.border
-        }
+    Platform.MenuBar {
+        window: root
 
-        delegate: MenuBarItem {
-            contentItem: Text {
-                text: parent.text
-                color: parent.highlighted ? theme.accent : theme.textPrimary
-                font.pixelSize: 14
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            background: Rectangle {
-                color: parent.highlighted ? theme.accentBg : "transparent"
-                radius: 8
-            }
-        }
-
-        Menu {
+        Platform.Menu {
             title: "文件"
-            Action {
+            Platform.MenuItem {
                 text: "打开视频"
+                shortcut: StandardKey.Open
                 onTriggered: videoPlaybackPane.openVideo()
             }
-            Action { text: "导入字幕" }
-        }
-        Menu {
-            title: "编辑"
-            Action { text: "查找" }
-        }
-        Menu {
-            title: "播放"
-            Action { text: "播放/暂停" }
-        }
-        Menu {
-            title: "学习"
-            Action { text: "开始训练" }
-        }
-        Menu {
-            title: "工具"
-            Action { text: "主题切换" }
-            Action {
-                text: "波形状态…"
-                onTriggered: waveformStatusDialog.open()
+            Platform.MenuItem {
+                text: "导入字幕"
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: "设置…"
+                shortcut: StandardKey.Preferences
+                role: Platform.MenuItem.PreferencesRole
+                onTriggered: settingsDialog.open()
             }
         }
-        Menu {
+        Platform.Menu {
+            title: "编辑"
+            type: Platform.Menu.EditMenu
+            Platform.MenuItem { text: "查找"; shortcut: StandardKey.Find }
+        }
+        Platform.Menu {
+            title: "播放"
+            Platform.MenuItem { text: "播放/暂停"; onTriggered: root.toggleNormalPlayback() }
+            Platform.MenuItem { text: "开始训练"; onTriggered: root.toggleTrainingPlayback() }
+        }
+        Platform.Menu {
             title: "帮助"
-            Action { text: "关于" }
+            Platform.MenuItem {
+                text: "快捷键…"
+                onTriggered: shortcutHelpDialog.open()
+            }
         }
     }
 
@@ -396,6 +691,12 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             orientation: Qt.Horizontal
+            handle: ThemedSplitHandle {
+                splitOrientation: Qt.Horizontal
+                gapColor: theme.windowBg
+                dividerColor: theme.border
+                accentColor: theme.accent
+            }
 
             LibrarySidebar {
                 id: librarySidebar
@@ -428,6 +729,12 @@ ApplicationWindow {
                 SplitView.fillWidth: true
                 SplitView.minimumWidth: 620
                 orientation: Qt.Vertical
+                handle: ThemedSplitHandle {
+                    splitOrientation: Qt.Vertical
+                    gapColor: theme.windowBg
+                    dividerColor: theme.border
+                    accentColor: theme.accent
+                }
 
                 VideoPlaybackPane {
                     id: videoPlaybackPane
@@ -435,6 +742,7 @@ ApplicationWindow {
                     SplitView.preferredHeight: 430
                     SplitView.fillHeight: root.videoFullScreen
                     fullScreenMode: root.videoFullScreen
+                    darkTheme: theme.darkAppearance
                     mediaBridge: mediaBridge
                     subtitleBridge: subtitleBridge
                     waveformBridge: waveformBridge
@@ -442,10 +750,20 @@ ApplicationWindow {
                         root.seekPlaybackManually(positionSecs)
                     }
                     onNormalPlaybackToggleRequested: root.toggleNormalPlayback()
+                    onVideoLoadStarted: {
+                        root.savePlaybackProgress()
+                        aiTutorBridge.setSubtitleContext("", -1, 0, 0,
+                                                         "", "", "", "")
+                    }
                     onVideoLoaded: function(path, durationSecs) {
                         trainingController.stopTraining()
-                        if (libraryBridge.recordOpenedVideo(path, durationSecs))
+                        var recorded = libraryBridge.recordOpenedVideo(
+                                    path, durationSecs)
+                        if (recorded)
                             librarySidebar.revealLearningVideos()
+                        var restoredPosition = recorded
+                                ? libraryBridge.lastPlaybackPosition(path) : 0
+                        mediaBridge.prepareInitialFrame(restoredPosition)
                         segmentBridge.loadForVideoPath(path, durationSecs)
                         noteBridge.loadForVideoPath(path, durationSecs)
                         noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
@@ -477,9 +795,29 @@ ApplicationWindow {
                     subtitleBridge: subtitleBridge
                     waveformBridge: waveformBridge
                     recordingBridge: recordingBridge
+                    recordingTrainingActive: trainingController.hasActiveSession
+                                             && trainingController.isRecordingSession
+                    recordingPlaybackPlaying: recordingPlaybackBridge.isPlaying
+                    recordingPlaybackPosition: recordingPlaybackBridge.currentPosition
+                    originalTrainingActive: trainingController.hasActiveSession
+                                            && !trainingController.isRecordingSession
+                    originalPlaybackPlaying: mediaBridge.isPlaying
                     canBeginNextSegment: segmentBridge.activeIndex >= 0
                                          && segmentBridge.activeEnd
                                             < waveformBridge.durationSecs
+                    speechRecognizing: speechRecognitionBridge.isRecognizing
+                    onSpeechRecognitionRequested: function(startSecs, endSecs) {
+                        if (!segmentBridge.ensureSelectionSegment(
+                                    startSecs,
+                                    endSecs,
+                                    controlPanel.repeatCount,
+                                    controlPanel.intervalSeconds))
+                            return
+                        speechRecognitionBridge.recognizeSelection(
+                                    mediaBridge.loadedPath,
+                                    startSecs,
+                                    endSecs)
+                    }
                     onPlaybackPositionRequested: function(positionSecs) {
                         root.seekPlaybackManually(positionSecs)
                     }
@@ -490,12 +828,32 @@ ApplicationWindow {
                     }
                     onRecordingStartRequested: {
                         trainingController.stopTraining()
+                        recordingPlaybackBridge.pause()
                         mediaBridge.pause()
                         videoPlaybackPane.syncPlaybackDependentPanels()
                         recordingBridge.startRecording()
                     }
                     onRecordingStopRequested: recordingBridge.stopRecording()
-                    onRecordingDeleteRequested: recordingBridge.deleteRecording()
+                    onRecordingDeleteRequested: {
+                        if (trainingController.hasActiveSession
+                                && trainingController.isRecordingSession)
+                            trainingController.stopTraining()
+                        recordingPlaybackBridge.unload()
+                        recordingBridge.deleteRecording()
+                    }
+                    onRecordingTrainingToggleRequested:
+                        root.toggleRecordingTraining()
+                    onOriginalTrainingToggleRequested:
+                        root.toggleOriginalTraining()
+                    onRecordingPlaybackSeekRequested: function(positionSecs) {
+                        if (trainingController.hasActiveSession
+                                && trainingController.isRecordingSession) {
+                            var wasPlaying = recordingPlaybackBridge.isPlaying
+                            recordingPlaybackBridge.seek(positionSecs)
+                            if (wasPlaying)
+                                recordingPlaybackBridge.play()
+                        }
+                    }
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg
                     borderColor: theme.border
@@ -515,7 +873,9 @@ ApplicationWindow {
                                           || trainingController.hasActiveSession)
                     isTraining: trainingController.isTraining
                     hasStartedTraining: trainingController.hasActiveSession
-                    isPlaybackPlaying: mediaBridge.isPlaying
+                    isPlaybackPlaying: trainingController.isRecordingSession
+                                       ? recordingPlaybackBridge.isPlaying
+                                       : mediaBridge.isPlaying
                     completedLoops: trainingController.completedLoops
                     totalLoops: trainingController.totalLoops
                     selectionStart: waveformBridge.selectionStart
@@ -541,6 +901,12 @@ ApplicationWindow {
                 SplitView.preferredWidth: 330
                 SplitView.maximumWidth: 420
                 orientation: Qt.Vertical
+                handle: ThemedSplitHandle {
+                    splitOrientation: Qt.Vertical
+                    gapColor: theme.windowBg
+                    dividerColor: theme.border
+                    accentColor: theme.accent
+                }
 
                 SubtitleView {
                     id: subtitleView
@@ -549,8 +915,23 @@ ApplicationWindow {
                     subtitleBridge: subtitleBridge
                     noteBridge: noteBridge
                     waveformBridge: waveformBridge
+                    aiBridge: aiTutorBridge
                     onNoteNavigationRequested: function(startSecs, endSecs, hasRange) {
                         root.navigateToNote(startSecs, endSecs, hasRange)
+                    }
+                    onAiSubtitleContextRequested: function(cueIndex, startSecs, endSecs, text) {
+                        aiTutorBridge.setSubtitleContext(
+                                    mediaBridge.loadedPath,
+                                    cueIndex,
+                                    startSecs,
+                                    endSecs,
+                                    text,
+                                    "",
+                                    "",
+                                    "")
+                    }
+                    onSubtitleSaveSucceeded: function(message) {
+                        root.showSuccessMessage(message)
                     }
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg
@@ -566,7 +947,7 @@ ApplicationWindow {
                     SplitView.fillHeight: true
                     segmentBridge: segmentBridge
                     onSegmentActivated: function(index) {
-                        root.activateLearningSegment(index)
+                        root.requestActivateLearningSegment(index)
                     }
                     onSegmentDeleteRequested: function(index) {
                         root.deleteLearningSegment(index)
@@ -596,64 +977,91 @@ ApplicationWindow {
             borderColor: theme.border
             textPrimary: theme.textPrimary
             textSecondary: theme.textSecondary
+            statusMessage: themeBridge.lastError.length > 0
+                           ? themeBridge.lastError : root.successMessage
+            statusIsError: themeBridge.lastError.length > 0
+            statusIsSuccess: themeBridge.lastError.length === 0
+                             && root.successMessage.length > 0
         }
+    }
 
-        Text {
-            Layout.fillWidth: true
-            visible: themeBridge.lastError.length > 0
-            text: themeBridge.lastError
-            color: "#c03d3d"
-            wrapMode: Text.Wrap
-            font.pixelSize: 13
-        }
+    SettingsDialog {
+        id: settingsDialog
+        themeBridge: themeBridge
+        aiSettingsBridge: aiTutorBridge
+        speechSettingsBridge: speechSettingsBridge
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        panelBg: theme.panelBg
+        elevatedBg: theme.elevatedBg
+        borderColor: theme.border
+        textPrimary: theme.textPrimary
+        textSecondary: theme.textSecondary
+        accent: theme.accent
+        accentBg: theme.accentBg
+    }
+
+    ShortcutHelpDialog {
+        id: shortcutHelpDialog
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        panelBg: theme.panelBg
+        elevatedBg: theme.elevatedBg
+        borderColor: theme.border
+        textPrimary: theme.textPrimary
+        textSecondary: theme.textSecondary
+        accent: theme.accent
     }
 
     Dialog {
-        id: waveformStatusDialog
-        title: "波形状态"
-        modal: false
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
-        width: 520
-        height: 220
+        id: unsavedSubtitleDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        title: "字幕尚未保存"
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        width: 430
 
-        background: Rectangle {
-            color: theme.panelBg
-            border.color: theme.border
-            border.width: 1
-            radius: 8
-        }
+        onRejected: root.pendingSegmentIndex = -1
 
-        header: Label {
-            text: "波形状态"
+        contentItem: Label {
+            padding: 18
+            text: "当前字幕内容尚未保存。是否先保存字幕，再切换到其他学习片段？"
             color: theme.textPrimary
-            font.pixelSize: 15
-            padding: 12
-            background: Rectangle {
-                color: theme.elevatedBg
-                radius: 8
-            }
-        }
-
-        contentItem: ScrollView {
-            clip: true
-            TextArea {
-                readOnly: true
-                wrapMode: Text.Wrap
-                text: waveformBridge ? waveformBridge.statusMessage : ""
-                color: theme.textPrimary
-                font.pixelSize: 13
-                background: null
-                padding: 12
-            }
+            wrapMode: Text.Wrap
         }
 
         footer: DialogButtonBox {
+            alignment: Qt.AlignRight
+
             Button {
-                text: "关闭"
-                onClicked: waveformStatusDialog.close()
+                text: subtitleView.isUpdatingSubtitle
+                      ? "更新字幕并切换" : "添加字幕并切换"
+                DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
+                onClicked: {
+                    if (!subtitleView.saveEditorText())
+                        return
+                    unsavedSubtitleDialog.close()
+                    root.activatePendingLearningSegment()
+                }
+            }
+
+            Button {
+                text: "不保存并切换"
+                DialogButtonBox.buttonRole: DialogButtonBox.DestructiveRole
+                onClicked: {
+                    subtitleView.discardUnsavedSubtitleChanges()
+                    unsavedSubtitleDialog.close()
+                    root.activatePendingLearningSegment()
+                }
+            }
+
+            Button {
+                text: "取消"
+                DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+                onClicked: unsavedSubtitleDialog.reject()
             }
         }
     }
+
 }

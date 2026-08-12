@@ -31,6 +31,7 @@ pub mod qobject {
         #[qproperty(f64, recording_duration, cxx_name = "recordingDuration")]
         #[qproperty(f64, recording_elapsed, cxx_name = "recordingElapsed")]
         #[qproperty(f64, alignment_offset, cxx_name = "alignmentOffset")]
+        #[qproperty(QString, recording_file_path, cxx_name = "recordingFilePath")]
         #[qproperty(QVector_f32, recording_peak_values, cxx_name = "recordingPeakValues")]
         #[qproperty(i32, recording_revision, cxx_name = "recordingRevision")]
         #[qproperty(QString, status_message, cxx_name = "statusMessage")]
@@ -93,6 +94,7 @@ pub struct RecordingBridgeRust {
     recording_duration: f64,
     recording_elapsed: f64,
     alignment_offset: f64,
+    recording_file_path: QString,
     recording_peak_values: QVector<f32>,
     recording_revision: i32,
     status_message: QString,
@@ -117,6 +119,7 @@ impl Default for RecordingBridgeRust {
             recording_duration: 0.0,
             recording_elapsed: 0.0,
             alignment_offset: 0.0,
+            recording_file_path: QString::from(""),
             recording_peak_values: QVector::from(Vec::new()),
             recording_revision: 1,
             status_message: QString::from("请先选择录音范围"),
@@ -479,11 +482,13 @@ impl qobject::RecordingBridge {
         mut self: Pin<&mut Self>,
         recording: &els_recording_core::Recording,
     ) {
-        self.as_mut().set_has_recording(true);
         self.as_mut()
             .set_recording_duration(recording.duration_secs);
         self.as_mut()
             .set_alignment_offset(recording.alignment_offset);
+        self.as_mut()
+            .set_recording_file_path(QString::from(&recording.file_path));
+        self.as_mut().set_has_recording(true);
     }
 
     fn clear_recording(mut self: Pin<&mut Self>) {
@@ -491,6 +496,7 @@ impl qobject::RecordingBridge {
         self.as_mut().set_recording_duration(0.0);
         self.as_mut().set_recording_elapsed(0.0);
         self.as_mut().set_alignment_offset(0.0);
+        self.as_mut().set_recording_file_path(QString::from(""));
         self.as_mut()
             .set_recording_peak_values(QVector::from(Vec::new()));
         self.as_mut().bump_recording_revision();

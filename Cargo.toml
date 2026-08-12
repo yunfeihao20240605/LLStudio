@@ -9,6 +9,10 @@ members = [
     "crates/els-recording-core",
     "crates/els-audio-capture",
     "crates/els-learning-core",
+    "crates/els-ai-core",
+    "crates/els-speech-core",
+    "crates/els-audio-export",
+    "crates/els-speech-tencent",
     "crates/els-storage",
     "crates/els-qt-bridge",
     "crates/els-app",
@@ -25,6 +29,14 @@ cxx = "1.0.197"
 cxx-qt = "0.9.1"
 cxx-qt-lib = "0.9.1"
 cxx-qt-build = "0.9.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+sha1 = "0.10.6"
+base64 = "0.22.1"
+url = "2.5.8"
+tungstenite = { version = "0.28.0", features = ["rustls-tls-native-roots"] }
+rustls = { version = "0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
 
 # cxx-qt-lib 会生成并编译大量 C++/Qt 类型。开发构建不需要调试这个第三方
 # 依赖，为它关闭调试符号可显著减少首次编译时间和 target 目录体积，同时

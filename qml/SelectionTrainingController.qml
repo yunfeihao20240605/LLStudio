@@ -4,6 +4,7 @@ QtObject {
     id: root
 
     property bool mediaAvailable: false
+    property bool recordingAvailable: false
     property real playbackPosition: 0
     property bool selectionAvailable: false
     property real selectionStart: 0
@@ -15,7 +16,9 @@ QtObject {
     readonly property bool canResume: internalIsTraining && (internalIsPaused || internalIsWaiting)
     readonly property bool hasActiveSession: internalHasActiveSession
     readonly property bool isLabelSequence: internalSessionLabel.length > 0
+    readonly property bool isRecordingSession: internalPlaybackSource === "recording"
     readonly property bool hasStartedCurrentSelection: internalHasActiveSession
+                                                       && !isRecordingSession
                                                        && !isLabelSequence
                                                        && selectionAvailable
                                                        && Math.abs(selectionStart - activeRangeStart) <= 0.001
@@ -37,6 +40,9 @@ QtObject {
     property var internalRanges: []
     property int internalCurrentRangeIndex: 0
     property string internalSessionLabel: ""
+    property string internalPlaybackSource: "video"
+    property bool internalFinishPending: false
+    property int internalPositionCheckRevision: 0
 
     signal seekAndPlayRequested(real positionSecs)
     signal pauseRequested()
@@ -50,11 +56,22 @@ QtObject {
 
         return startRangeSequence([
             { start: selectionStart, end: selectionEnd }
-        ], repeatCount, intervalSeconds, "")
+        ], repeatCount, intervalSeconds, "", "video")
     }
 
-    function startRangeSequence(ranges, repeatCount, intervalSeconds, label) {
-        if (!mediaAvailable || !ranges || ranges.length <= 0)
+    function startRecordingTraining(durationSecs, repeatCount, intervalSeconds) {
+        if (!recordingAvailable || !isFinite(durationSecs) || durationSecs <= 0)
+            return false
+
+        return startRangeSequence([
+            { start: 0, end: durationSecs }
+        ], repeatCount, intervalSeconds, "", "recording")
+    }
+
+    function startRangeSequence(ranges, repeatCount, intervalSeconds, label, playbackSource) {
+        var source = playbackSource === "recording" ? "recording" : "video"
+        if ((source === "recording" ? !recordingAvailable : !mediaAvailable)
+                || !ranges || ranges.length <= 0)
             return false
 
         var normalizedRanges = []
@@ -67,12 +84,14 @@ QtObject {
         }
 
         intervalTimer.stop()
+        cancelPendingPositionCheck()
         internalTotalLoops = Math.max(1, Math.floor(repeatCount))
         internalIntervalSeconds = Math.max(0, Math.floor(intervalSeconds))
         internalCompletedLoops = 0
         internalRanges = normalizedRanges
         internalCurrentRangeIndex = 0
         internalSessionLabel = label ? String(label) : ""
+        internalPlaybackSource = source
         activeRangeStart = normalizedRanges[0].start
         activeRangeEnd = normalizedRanges[0].end
         internalIsTraining = true
@@ -87,8 +106,8 @@ QtObject {
         if (!internalIsTraining)
             return
 
-        clearTrainingSession("训练已停止")
         pauseRequested()
+        clearTrainingSession("训练已停止")
     }
 
     function cancelTrainingSession() {
@@ -101,6 +120,7 @@ QtObject {
 
     function clearTrainingSession(message) {
         intervalTimer.stop()
+        cancelPendingPositionCheck()
         internalIsTraining = false
         internalIsWaiting = false
         internalIsPaused = false
@@ -108,6 +128,7 @@ QtObject {
         internalRanges = []
         internalCurrentRangeIndex = 0
         internalSessionLabel = ""
+        internalPlaybackSource = "video"
         internalStatusMessage = message
     }
 
@@ -170,6 +191,8 @@ QtObject {
 
     function playingStatus() {
         var loopText = "第 " + (internalCompletedLoops + 1) + "/" + internalTotalLoops + " 次"
+        if (isRecordingSession)
+            return "正在播放录音 " + loopText
         if (!isLabelSequence)
             return "正在播放 " + loopText
         return "正在播放“" + internalSessionLabel + "” 范围 "
@@ -188,6 +211,32 @@ QtObject {
             return
         }
         finishCurrentLoop()
+    }
+
+    function cancelPendingPositionCheck() {
+        internalFinishPending = false
+        internalPositionCheckRevision += 1
+    }
+
+    function scheduleCurrentRangeFinish() {
+        if (internalFinishPending)
+            return
+
+        internalFinishPending = true
+        var revision = ++internalPositionCheckRevision
+        Qt.callLater(function() {
+            if (revision !== root.internalPositionCheckRevision)
+                return
+
+            if (root.internalIsTraining
+                    && !root.internalIsWaiting
+                    && !root.internalIsPaused
+                    && root.playbackPosition >= root.activeRangeEnd - 0.02)
+                root.finishCurrentRange()
+
+            if (revision === root.internalPositionCheckRevision)
+                root.internalFinishPending = false
+        })
     }
 
     function finishCurrentLoop() {
@@ -218,27 +267,33 @@ QtObject {
     onPlaybackPositionChanged: {
         if (internalIsTraining && !internalIsWaiting && !internalIsPaused
                 && playbackPosition >= activeRangeEnd - 0.02)
-            finishCurrentRange()
+            scheduleCurrentRangeFinish()
     }
 
     onMediaAvailableChanged: {
-        if (internalIsTraining && !mediaAvailable)
+        if (internalIsTraining && !isRecordingSession && !mediaAvailable)
+            stopTraining()
+    }
+
+    onRecordingAvailableChanged: {
+        if (internalIsTraining && isRecordingSession && !recordingAvailable)
             stopTraining()
     }
 
     onSelectionAvailableChanged: {
-        if (internalIsTraining && !isLabelSequence && !selectionAvailable)
+        if (internalIsTraining && !isRecordingSession
+                && !isLabelSequence && !selectionAvailable)
             stopTraining()
     }
 
     onSelectionStartChanged: {
-        if (internalIsTraining && !isLabelSequence
+        if (internalIsTraining && !isRecordingSession && !isLabelSequence
                 && Math.abs(selectionStart - activeRangeStart) > 0.001)
             stopTraining()
     }
 
     onSelectionEndChanged: {
-        if (internalIsTraining && !isLabelSequence
+        if (internalIsTraining && !isRecordingSession && !isLabelSequence
                 && Math.abs(selectionEnd - activeRangeEnd) > 0.001)
             stopTraining()
     }

@@ -13,6 +13,10 @@ Rectangle {
     property color textSecondary: "#6b7280"
     property color accent: "#2f6fed"
     property color accentBg: "#eaf1fe"
+    property bool darkTheme: false
+    readonly property url emptyBrandSource: darkTheme
+                                            ? "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand.png"
+                                            : "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand-light.png"
     property var mediaBridge
     property var subtitleBridge
     property var waveformBridge
@@ -21,6 +25,7 @@ Rectangle {
 
     signal manualSeekRequested(real positionSecs)
     signal normalPlaybackToggleRequested()
+    signal videoLoadStarted()
     signal videoLoaded(string path, real durationSecs)
     signal fullScreenToggleRequested()
 
@@ -78,6 +83,7 @@ Rectangle {
         if (!mediaBridge || !path || path.trim().length === 0)
             return
 
+        root.videoLoadStarted()
         if (!mediaBridge.loadVideoPath(path))
             return
 
@@ -103,9 +109,11 @@ Rectangle {
     border.width: fullScreenMode ? 0 : 1
 
     Timer {
-        interval: 120
+        interval: mediaBridge && mediaBridge.preparingInitialFrame ? 33 : 120
         repeat: true
-        running: mediaBridge && mediaBridge.isPlaying
+        running: mediaBridge
+                 && (mediaBridge.isPlaying
+                     || mediaBridge.preparingInitialFrame)
         onTriggered: {
             mediaBridge.tick()
             syncPlaybackDependentPanels()
@@ -116,67 +124,6 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: root.fullScreenMode ? 0 : 12
         spacing: root.fullScreenMode ? 0 : 10
-
-        RowLayout {
-            Layout.fillWidth: true
-            visible: !root.fullScreenMode
-            spacing: 8
-
-            Rectangle {
-                Layout.preferredWidth: 170
-                Layout.preferredHeight: 34
-                radius: 9
-                color: elevatedBg
-                border.color: borderColor
-
-                Row {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    spacing: 10
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: mediaBridge && mediaBridge.loadedPath.length > 0 ? mediaBridge.loadedPath.split("/").slice(-1)[0] : "TED_AI_未来.mp4"
-                        color: textPrimary
-                        font.pixelSize: 14
-                        elide: Text.ElideRight
-                        width: 120
-                    }
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "×"
-                        color: textSecondary
-                        font.pixelSize: 16
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.preferredWidth: 34
-                Layout.preferredHeight: 34
-                radius: 9
-                color: elevatedBg
-                border.color: borderColor
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "+"
-                    color: textSecondary
-                    font.pixelSize: 20
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: root.openVideo()
-                }
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
-        }
 
         Rectangle {
             Layout.fillWidth: true
@@ -196,36 +143,37 @@ Rectangle {
                     mpvHandleToken: mediaBridge ? mediaBridge.mpvHandleToken : "0"
                 }
 
+                Image {
+                    id: videoPlaceholder
+                    z: 5
+                    anchors.fill: parent
+                    source: root.emptyBrandSource
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: mediaBridge
+                             && mediaBridge.loadedPath.length > 0
+                             && !mediaBridge.isPlaying
+                             && !mediaBridge.preparingInitialFrame
+                             && mediaBridge.currentPosition < 0.05
+                    opacity: visible ? 1.0 : 0.0
+                    Behavior on opacity {
+                        NumberAnimation { duration: 160 }
+                    }
+                }
+
                 Rectangle {
+                    z: 6
                     anchors.fill: parent
                     visible: !mediaBridge || mediaBridge.loadedPath.length === 0
                     radius: 12
-                    color: "transparent"
+                    color: root.elevatedBg
+                    clip: true
 
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 10
-
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: "◌"
-                            color: borderColor
-                            font.pixelSize: 68
-                        }
-
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: "视频播放区域"
-                            color: textSecondary
-                            font.pixelSize: 24
-                        }
-
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: "点击“文件 > 打开视频”加载本地视频"
-                            color: textSecondary
-                            font.pixelSize: 14
-                        }
+                    Image {
+                        anchors.fill: parent
+                        source: root.emptyBrandSource
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
                     }
                 }
 
@@ -384,10 +332,17 @@ Rectangle {
                 font.pixelSize: 14
             }
 
-            ComboBox {
+            ThemedComboBox {
                 Layout.preferredWidth: 84
                 model: ["0.25x", "0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"]
                 currentIndex: root.playbackRateIndex(mediaBridge ? mediaBridge.playbackRate : 1.0)
+                panelColor: root.panelBg
+                elevatedColor: root.elevatedBg
+                borderColor: root.borderColor
+                textColor: root.textPrimary
+                disabledTextColor: root.textSecondary
+                accentColor: root.accent
+                accentBackgroundColor: root.accentBg
                 onActivated: {
                     if (mediaBridge)
                         mediaBridge.applyPlaybackRate(parseFloat(currentText))
@@ -400,11 +355,14 @@ Rectangle {
                 font.pixelSize: 18
             }
 
-            Slider {
+            ThemedSlider {
                 Layout.preferredWidth: 120
                 from: 0
                 to: 100
                 value: 70
+                panelColor: root.panelBg
+                trackColor: root.borderColor
+                accentColor: root.accent
             }
 
             Item {
@@ -414,7 +372,6 @@ Rectangle {
             Repeater {
                 model: [
                     { icon: "CC", action: "subtitle" },
-                    { icon: "⚙", action: "settings" },
                     { icon: "⛶", action: "fullscreen" }
                 ]
 
@@ -462,13 +419,16 @@ Rectangle {
             }
         }
 
-        Slider {
+        ThemedSlider {
             Layout.fillWidth: true
             visible: !root.fullScreenMode
             from: 0
             to: mediaBridge && mediaBridge.duration > 0 ? mediaBridge.duration : 1
             value: mediaBridge ? mediaBridge.currentPosition : 0
             enabled: mediaBridge && mediaBridge.duration > 0
+            panelColor: root.panelBg
+            trackColor: root.borderColor
+            accentColor: root.accent
 
             onMoved: {
                 root.manualSeekRequested(value)
@@ -481,16 +441,15 @@ Rectangle {
 
             Text {
                 Layout.fillWidth: true
-                text: mediaBridge ? mediaBridge.mediaSummary : "Container: mp4 | Video: h264 | Audio: aac"
+                text: mediaBridge
+                      ? mediaBridge.mediaSummary
+                        + (mediaBridge.duration > 0
+                           ? " | 总时长: " + root.formatSeconds(mediaBridge.duration)
+                           : "")
+                      : "Container: mp4 | Video: h264 | Audio: aac"
                 color: textPrimary
                 font.pixelSize: 13
                 elide: Text.ElideRight
-            }
-
-            Text {
-                text: mediaBridge ? mediaBridge.statusMessage : "Ready"
-                color: textSecondary
-                font.pixelSize: 13
             }
         }
     }

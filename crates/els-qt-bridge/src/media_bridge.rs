@@ -29,6 +29,7 @@ pub mod qobject {
         #[qproperty(QString, backend_name, cxx_name = "backendName")]
         #[qproperty(QString, media_summary, cxx_name = "mediaSummary")]
         #[qproperty(QString, mpv_handle_token, cxx_name = "mpvHandleToken")]
+        #[qproperty(bool, preparing_initial_frame, cxx_name = "preparingInitialFrame")]
         type MediaBridge = super::MediaBridgeRust;
 
         #[qinvokable]
@@ -51,6 +52,10 @@ pub mod qobject {
 
         #[qinvokable]
         fn seek(self: Pin<&mut MediaBridge>, position_secs: f64) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "prepareInitialFrame"]
+        fn prepare_initial_frame(self: Pin<&mut MediaBridge>, position_secs: f64) -> bool;
 
         #[qinvokable]
         #[cxx_name = "applyPlaybackRate"]
@@ -80,6 +85,7 @@ pub struct MediaBridgeRust {
     backend_name: QString,
     media_summary: QString,
     mpv_handle_token: QString,
+    preparing_initial_frame: bool,
     player: els_media_core::Player,
 }
 
@@ -103,6 +109,7 @@ impl Default for MediaBridgeRust {
             backend_name: QString::from(player.backend_name()),
             media_summary: QString::from(&player.media_summary()),
             mpv_handle_token: QString::from(&mpv_handle.to_string()),
+            preparing_initial_frame: false,
             player,
         }
     }
@@ -210,6 +217,26 @@ impl qobject::MediaBridge {
         }
     }
 
+    fn prepare_initial_frame(mut self: Pin<&mut Self>, position_secs: f64) -> bool {
+        let result = self
+            .as_mut()
+            .rust_mut()
+            .player
+            .prepare_initial_frame(position_secs);
+        match result {
+            Ok(()) => {
+                self.as_mut().sync_from_player("Preparing video frame");
+                true
+            }
+            Err(err) => {
+                let message = format!("Failed to prepare video frame: {err}");
+                eprintln!("{message}");
+                self.as_mut().set_status_message(QString::from(&message));
+                false
+            }
+        }
+    }
+
     fn apply_playback_rate(mut self: Pin<&mut Self>, playback_rate: f64) -> bool {
         match self
             .as_mut()
@@ -297,7 +324,12 @@ impl qobject::MediaBridge {
         let backend_name = QString::from(self.rust().player.backend_name());
         let media_summary = QString::from(&self.rust().player.media_summary());
         let mpv_handle_token = QString::from(&self.rust().player.mpv_handle_value().to_string());
+        let preparing_initial_frame = self.rust().player.is_preparing_initial_frame();
 
+        // Publish preparation first so QML cannot persist the transient zero
+        // position when a playing video is replaced by a newly loaded one.
+        self.as_mut()
+            .set_preparing_initial_frame(preparing_initial_frame);
         self.as_mut().set_loaded_path(loaded_path);
         self.as_mut().set_is_playing(is_playing);
         self.as_mut().set_current_position(current_position);
@@ -342,7 +374,7 @@ fn pick_video_file_path() -> Result<Option<PathBuf>, String> {
         let output = Command::new("osascript")
             .args([
                 "-e",
-                r#"POSIX path of (choose file with prompt "Select a video file for Language Learning Studio")"#,
+                r#"POSIX path of (choose file with prompt "Select a video file for LLStudio")"#,
             ])
             .output()
             .map_err(|err| err.to_string())?;

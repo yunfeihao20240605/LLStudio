@@ -6,6 +6,7 @@ Item {
     id: root
 
     property var noteBridge
+    property color panelBg: "#ffffff"
     property color elevatedBg: "#fafbfc"
     property color borderColor: "#d0d7de"
     property color textPrimary: "#1f2329"
@@ -148,6 +149,12 @@ Item {
     SplitView {
         anchors.fill: parent
         orientation: Qt.Vertical
+        handle: ThemedSplitHandle {
+            splitOrientation: Qt.Vertical
+            gapColor: root.panelBg
+            dividerColor: root.borderColor
+            accentColor: root.accent
+        }
 
         Item {
             SplitView.minimumHeight: 100

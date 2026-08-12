@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+  <rect width="1200" height="700" fill="#101827"/>
+  <path d="M0 510H1200" stroke="#26364b" stroke-width="2"/>
+  <path d="M0 190H1200" stroke="#1c2a3d" stroke-width="2"/>
+  <path d="M130 140V560M270 140V560M410 140V560M550 140V560M690 140V560M830 140V560M970 140V560M1110 140V560"
+        stroke="#1b2b40" stroke-width="2"/>
+  <path d="M0 352 C42 352 42 292 84 292 S126 414 168 414 S210 250 252 250 S294 390 336 390 S378 304 420 304 S462 430 504 430 S546 270 588 270 S630 374 672 374 S714 226 756 226 S798 440 840 440 S882 300 924 300 S966 386 1008 386 S1050 262 1092 262 S1134 352 1200 352"
+        fill="none" stroke="#4f9cff" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+  <path d="M0 352 C42 352 42 326 84 326 S126 378 168 378 S210 316 252 316 S294 370 336 370 S378 338 420 338 S462 382 504 382 S546 314 588 314 S630 360 672 360 S714 294 756 294 S798 386 840 386 S882 324 924 324 S966 364 1008 364 S1050 310 1092 310 S1134 352 1200 352"
+        fill="none" stroke="#7ee2c2" stroke-width="3" stroke-linecap="round" opacity="0.72"/>
+  <path d="M550 270V434M518 302L550 270L582 302" fill="none" stroke="#e7f1ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="550" cy="352" r="9" fill="#e7f1ff"/>
+</svg>

@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2878c8"/>
+      <stop offset="0.52" stop-color="#4b7fe3"/>
+      <stop offset="1" stop-color="#7659cf"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2878c8" stop-opacity="0.08"/>
+      <stop offset="0.22" stop-color="#2878c8" stop-opacity="0.62"/>
+      <stop offset="0.52" stop-color="#4b7fe3" stop-opacity="0.9"/>
+      <stop offset="0.78" stop-color="#46b99a" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#46b99a" stop-opacity="0.08"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#4b7fe3" stop-opacity="0.17"/>
+      <stop offset="0.52" stop-color="#2878c8" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#2878c8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <filter id="smallGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <!-- Ambient field -->
+  <ellipse cx="600" cy="340" rx="430" ry="285" fill="url(#halo)"/>
+  <ellipse cx="600" cy="340" rx="285" ry="205" fill="none"
+           stroke="#4b7fe3" stroke-opacity="0.1" stroke-width="2"
+           stroke-dasharray="13 18"/>
+  <ellipse cx="600" cy="340" rx="225" ry="162" fill="none"
+           stroke="#46b99a" stroke-opacity="0.1" stroke-width="2"
+           stroke-dasharray="4 13"/>
+
+  <!-- Quiet technical grid -->
+  <g stroke="#77879a" stroke-opacity="0.09" stroke-width="1.5">
+    <path d="M90 135H1110M90 205H1110M90 495H1110M90 565H1110"/>
+    <path d="M160 100V590M320 100V590M480 100V590M720 100V590M880 100V590M1040 100V590"/>
+  </g>
+
+  <!-- Upper abstract waveform -->
+  <path d="M55 178
+           C92 178 102 161 132 161 S170 205 205 205
+           S244 132 286 132 S326 220 365 220
+           S404 154 444 154 S482 193 522 193
+           S562 112 603 112 S642 224 684 224
+           S724 145 764 145 S805 203 844 203
+           S884 164 923 164 S961 190 1000 190
+           S1051 148 1086 148 S1120 178 1145 178"
+        fill="none" stroke="url(#wave)" stroke-width="5.5"
+        stroke-linecap="round"/>
+  <path d="M55 178
+           C98 178 105 171 135 171 S172 188 205 188
+           S246 159 286 159 S327 197 365 197
+           S405 169 444 169 S483 185 522 185
+           S563 151 603 151 S643 198 684 198
+           S725 164 764 164 S806 189 844 189
+           S884 172 923 172 S963 183 1000 183
+           S1050 166 1086 166 S1120 178 1145 178"
+        fill="none" stroke="#46b99a" stroke-opacity="0.43"
+        stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Brand halo -->
+  <circle cx="600" cy="338" r="128" fill="#4b7fe3" fill-opacity="0.05"/>
+  <circle cx="600" cy="338" r="116" fill="none" stroke="#4b7fe3"
+          stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="600" cy="338" r="139" fill="none" stroke="#2878c8"
+          stroke-opacity="0.1" stroke-width="10" filter="url(#glow)"/>
+
+  <!-- L-frame + S sound-track emblem -->
+  <g transform="translate(487 228)">
+    <path d="M22 8H201 M22 8V205H214"
+          fill="none" stroke="url(#brand)" stroke-width="18"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M184 48
+             C157 23 94 27 78 63
+             C61 101 97 117 136 121
+             C179 126 197 143 183 174
+             C166 211 101 211 70 180"
+          fill="none" stroke="url(#brand)" stroke-width="16"
+          stroke-linecap="round"/>
+    <path d="M72 121H191" fill="none" stroke="#46b99a"
+          stroke-opacity="0.65" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="72" cy="121" r="5" fill="#46b99a"/>
+    <circle cx="191" cy="121" r="5" fill="#46b99a"/>
+  </g>
+
+  <!-- Emblem nodes -->
+  <g fill="#2878c8">
+    <circle cx="469" cy="292" r="4" fill-opacity="0.48"/>
+    <circle cx="731" cy="386" r="5" fill-opacity="0.58"/>
+    <circle cx="483" cy="424" r="3.5" fill-opacity="0.42"/>
+  </g>
+  <g stroke="#2878c8" stroke-opacity="0.25" stroke-width="1.5">
+    <path d="M469 292H430L408 270"/>
+    <path d="M731 386H773L796 410"/>
+    <path d="M483 424H450"/>
+  </g>
+
+  <!-- Brand wordmark -->
+  <text x="600" y="496" text-anchor="middle"
+        fill="url(#brand)" font-family="sans-serif"
+        font-size="31" font-weight="650" letter-spacing="8">LLSTUDIO</text>
+  <path d="M480 516H720" stroke="url(#brand)" stroke-opacity="0.28"
+        stroke-width="2" stroke-linecap="round"/>
+  <circle cx="465" cy="516" r="3" fill="#2878c8" fill-opacity="0.4"/>
+  <circle cx="735" cy="516" r="3" fill="#7659cf" fill-opacity="0.4"/>
+
+  <!-- Lower abstract waveform -->
+  <path d="M55 570
+           C95 570 100 545 136 545 S175 604 214 604
+           S253 526 292 526 S331 587 370 587
+           S411 552 450 552 S489 600 529 600
+           S568 536 608 536 S648 586 688 586
+           S728 553 768 553 S808 610 848 610
+           S888 532 928 532 S969 589 1008 589
+           S1050 556 1086 556 S1120 570 1145 570"
+        fill="none" stroke="url(#wave)" stroke-width="4.5"
+        stroke-linecap="round" opacity="0.68"/>
+
+  <!-- Perspective depth grid -->
+  <g fill="none" stroke="#77879a" stroke-opacity="0.09" stroke-width="1.5">
+    <path d="M175 665L455 550M325 665L515 550M475 665L575 550M625 665L635 550M775 665L695 550M925 665L755 550M1075 665L815 550"/>
+    <path d="M145 640H1055M205 615H995M270 593H930"/>
+  </g>
+
+  <!-- Sparse particles -->
+  <g fill="#2878c8">
+    <circle cx="128" cy="102" r="3" fill-opacity="0.35"/>
+    <circle cx="236" cy="246" r="2.5" fill-opacity="0.22"/>
+    <circle cx="972" cy="257" r="3" fill-opacity="0.3"/>
+    <circle cx="1082" cy="118" r="2.5" fill-opacity="0.3"/>
+    <circle cx="1040" cy="474" r="2.5" fill-opacity="0.28"/>
+  </g>
+  <g fill="#46b99a" filter="url(#smallGlow)">
+    <circle cx="286" cy="132" r="4" fill-opacity="0.55"/>
+    <circle cx="684" cy="224" r="4" fill-opacity="0.5"/>
+    <circle cx="928" cy="532" r="4" fill-opacity="0.45"/>
+  </g>
+</svg>

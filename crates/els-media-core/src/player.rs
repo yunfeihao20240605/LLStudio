@@ -19,11 +19,23 @@ pub struct Player {
     media_probe: Option<crate::MediaProbe>,
     mpv: Option<crate::mpv::MpvHandle>,
     backend_error: Option<String>,
+    keep_open: bool,
+    pending_initial_position_secs: Option<f64>,
 }
 
 impl Default for Player {
     fn default() -> Self {
-        match crate::mpv::MpvHandle::new() {
+        Self::new_with_keep_open(false)
+    }
+}
+
+impl Player {
+    pub fn new_audio_playback() -> Self {
+        Self::new_with_keep_open(true)
+    }
+
+    fn new_with_keep_open(keep_open: bool) -> Self {
+        match crate::mpv::MpvHandle::new_with_keep_open(keep_open) {
             Ok(mpv) => Self {
                 state: PlayerState::Stopped,
                 loaded_path: None,
@@ -33,6 +45,8 @@ impl Default for Player {
                 media_probe: None,
                 mpv: Some(mpv),
                 backend_error: None,
+                keep_open,
+                pending_initial_position_secs: None,
             },
             Err(err) => Self {
                 state: PlayerState::Stopped,
@@ -43,6 +57,8 @@ impl Default for Player {
                 media_probe: None,
                 mpv: None,
                 backend_error: Some(err.to_string()),
+                keep_open,
+                pending_initial_position_secs: None,
             },
         }
     }
@@ -69,6 +85,7 @@ impl crate::MediaController for Player {
         self.duration_secs = probe.duration_secs;
         self.media_probe = Some(probe);
         self.state = PlayerState::Paused;
+        self.pending_initial_position_secs = Some(0.0);
         Ok(())
     }
 
@@ -146,6 +163,21 @@ impl Player {
         self.loaded_path.is_some()
     }
 
+    pub fn prepare_initial_frame(&mut self, position_secs: f64) -> els_types::AppResult<()> {
+        self.ensure_loaded()?;
+        if !position_secs.is_finite() || position_secs.is_sign_negative() {
+            return Err(els_types::AppError::InvalidArgument(
+                "initial playback position must be a non-negative number".to_string(),
+            ));
+        }
+        self.pending_initial_position_secs = Some(position_secs.min(self.duration_secs));
+        Ok(())
+    }
+
+    pub fn is_preparing_initial_frame(&self) -> bool {
+        self.pending_initial_position_secs.is_some()
+    }
+
     pub fn backend_name(&self) -> &'static str {
         "libmpv (embedded)"
     }
@@ -215,7 +247,27 @@ impl Player {
             return Ok(());
         }
 
-        self.sync_from_backend()
+        self.sync_from_backend()?;
+        self.try_prepare_initial_frame()
+    }
+
+    fn try_prepare_initial_frame(&mut self) -> els_types::AppResult<()> {
+        let Some(target_position) = self.pending_initial_position_secs else {
+            return Ok(());
+        };
+        let media_ready = self.with_mpv(|mpv| mpv.time_pos())?.is_some();
+        if !media_ready {
+            return Ok(());
+        }
+
+        self.with_mpv(|mpv| {
+            mpv.set_pause(true)?;
+            mpv.seek_absolute(target_position)
+        })?;
+        self.current_position_secs = target_position;
+        self.state = PlayerState::Paused;
+        self.pending_initial_position_secs = None;
+        Ok(())
     }
 
     fn sync_from_backend(&mut self) -> els_types::AppResult<()> {
@@ -256,7 +308,7 @@ impl Player {
 
     fn ensure_mpv(&mut self) -> els_types::AppResult<&mut crate::mpv::MpvHandle> {
         if self.mpv.is_none() {
-            match crate::mpv::MpvHandle::new() {
+            match crate::mpv::MpvHandle::new_with_keep_open(self.keep_open) {
                 Ok(mpv) => {
                     self.backend_error = None;
                     self.mpv = Some(mpv);
@@ -317,6 +369,20 @@ mod tests {
     }
 
     #[test]
+    fn initial_frame_target_is_clamped_to_media_duration() {
+        let mut player = Player::default();
+        player.loaded_path = Some("demo.mp4".to_string());
+        player.duration_secs = 300.0;
+
+        player
+            .prepare_initial_frame(420.0)
+            .expect("prepare initial frame");
+
+        assert!(player.is_preparing_initial_frame());
+        assert_eq!(player.pending_initial_position_secs, Some(300.0));
+    }
+
+    #[test]
     fn runtime_sync_overrides_duration_and_position() {
         let mut player = Player::default();
         player.loaded_path = Some("demo.mp4".to_string());
@@ -330,5 +396,11 @@ mod tests {
         assert_eq!(player.current_position_secs(), 12.0);
         assert_eq!(player.duration_secs(), 90.0);
         assert_eq!(player.state(), PlaybackState::Playing);
+    }
+
+    #[test]
+    fn audio_player_keeps_the_loaded_file_open() {
+        assert!(!Player::default().keep_open);
+        assert!(Player::new_audio_playback().keep_open);
     }
 }

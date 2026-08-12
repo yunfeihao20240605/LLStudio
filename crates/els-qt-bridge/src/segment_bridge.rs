@@ -56,6 +56,16 @@ pub mod qobject {
         ) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "ensureSelectionSegment"]
+        fn ensure_selection_segment(
+            self: Pin<&mut SegmentBridge>,
+            start_secs: f64,
+            end_secs: f64,
+            repeat_count: i32,
+            interval_seconds: i32,
+        ) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "activateSegment"]
         fn activate_segment(self: Pin<&mut SegmentBridge>, index: i32) -> bool;
 
@@ -285,6 +295,54 @@ impl qobject::SegmentBridge {
             .position(|segment| segment.id == Some(saved_id))
             .unwrap_or(0) as i32;
         self.as_mut().activate_segment(index)
+    }
+
+    fn ensure_selection_segment(
+        mut self: Pin<&mut Self>,
+        start_secs: f64,
+        end_secs: f64,
+        repeat_count: i32,
+        interval_seconds: i32,
+    ) -> bool {
+        let video_id = match self.rust().current_video_id {
+            Some(video_id) => video_id,
+            None => return false,
+        };
+        if let Some(index) = matching_segment_index(&self.rust().segments, start_secs, end_secs) {
+            return self.as_mut().activate_segment(index as i32);
+        }
+
+        let segment = els_learning_core::Segment {
+            id: None,
+            video_id,
+            range: els_types::TimeRange {
+                start: start_secs,
+                end: end_secs,
+            },
+            repeat_count: repeat_count.max(1) as u32,
+            interval_seconds: interval_seconds.max(0) as u32,
+            completed_loops: 0,
+            label: String::new(),
+        };
+        let saved_id = match self.as_mut().rust_mut().manager.add_segment(segment) {
+            Ok(id) => id,
+            Err(err) => return self.as_mut().report_error("添加识别片段失败", err),
+        };
+        if !self.as_mut().reload_segments() {
+            return false;
+        }
+        let index = self
+            .rust()
+            .segments
+            .iter()
+            .position(|segment| segment.id == Some(saved_id))
+            .unwrap_or(0) as i32;
+        if !self.as_mut().activate_segment(index) {
+            return false;
+        }
+        self.as_mut()
+            .set_status_message(QString::from("识别片段已添加"));
+        true
     }
 
     fn activate_segment(mut self: Pin<&mut Self>, index: i32) -> bool {
@@ -643,5 +701,41 @@ impl qobject::SegmentBridge {
         eprintln!("{message}");
         self.as_mut().set_status_message(QString::from(&message));
         false
+    }
+}
+
+fn matching_segment_index(
+    segments: &[els_learning_core::Segment],
+    start_secs: f64,
+    end_secs: f64,
+) -> Option<usize> {
+    const TIME_TOLERANCE_SECS: f64 = 0.05;
+    segments.iter().position(|segment| {
+        (segment.range.start - start_secs).abs() < TIME_TOLERANCE_SECS
+            && (segment.range.end - end_secs).abs() < TIME_TOLERANCE_SECS
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::matching_segment_index;
+
+    fn segment(start: f64, end: f64) -> els_learning_core::Segment {
+        els_learning_core::Segment {
+            id: None,
+            video_id: 1,
+            range: els_types::TimeRange { start, end },
+            repeat_count: 1,
+            interval_seconds: 0,
+            completed_loops: 0,
+            label: String::new(),
+        }
+    }
+
+    #[test]
+    fn matches_only_the_same_selection_range() {
+        let segments = vec![segment(1.0, 2.0), segment(3.0, 4.0)];
+        assert_eq!(matching_segment_index(&segments, 3.02, 4.02), Some(1));
+        assert_eq!(matching_segment_index(&segments, 3.2, 4.0), None);
     }
 }

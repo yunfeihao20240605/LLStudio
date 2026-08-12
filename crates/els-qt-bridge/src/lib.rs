@@ -5,6 +5,7 @@
 //! 其余 `*_bridge.rs` 仍保持普通 Rust 适配结构体，占位后续按模块逐步迁移。
 
 mod app_bootstrap;
+pub mod ai_tutor_bridge;
 pub mod graphics_backend;
 pub mod learning_bridge;
 pub mod library_bridge;
@@ -12,7 +13,10 @@ pub mod media_bridge;
 pub mod mpv_video_item;
 pub mod note_bridge;
 pub mod recording_bridge;
+pub mod recording_playback_bridge;
 pub mod segment_bridge;
+pub mod speech_recognition_bridge;
+pub mod speech_settings_bridge;
 pub mod subtitle_bridge;
 pub mod theme_bridge;
 pub mod waveform_bridge;

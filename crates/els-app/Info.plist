@@ -5,7 +5,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.yfhao.language-learning-studio</string>
     <key>CFBundleName</key>
-    <string>Language Learning Studio</string>
+    <string>LLStudio</string>
+    <key>CFBundleDisplayName</key>
+    <string>LLStudio</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>用于录制跟读音频，并与原音波形进行对比。</string>
 </dict>

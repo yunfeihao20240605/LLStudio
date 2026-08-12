@@ -74,3 +74,22 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );";
+
+pub const CREATE_AI_CONVERSATIONS_TABLE: &str = "\
+CREATE TABLE IF NOT EXISTS ai_conversations (
+    video_path TEXT NOT NULL,
+    cue_index INTEGER NOT NULL,
+    messages_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (video_path, cue_index)
+);";
+
+pub const CREATE_SPEECH_PROVIDER_PROFILE_TABLE: &str = "\
+CREATE TABLE IF NOT EXISTS speech_provider_profile (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    provider_kind TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0
+);";

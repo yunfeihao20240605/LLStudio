@@ -14,10 +14,18 @@ Item {
     property color highlightColor: "#2f6fed"
     property real displayOffset: recordingBridge ? recordingBridge.alignmentOffset : 0
     property bool alignmentDragging: false
+    property bool trainingPlaybackActive: false
+    property bool trainingPlaybackPlaying: false
+    property real trainingPlaybackPosition: 0
+    readonly property real trainingPlaybackVideoPosition: recordingBridge
+                                                        ? recordingBridge.targetStart
+                                                          + trainingPlaybackPosition
+                                                        : 0
     property real pressX: 0
     property real pressOffset: 0
 
     signal seekRequested(real positionSecs)
+    signal trainingPlaybackToggleRequested()
     signal alignmentCommitRequested(real offsetSecs)
     signal resetAlignmentRequested()
     signal deleteRequested()
@@ -154,6 +162,25 @@ Item {
         }
     }
 
+    Rectangle {
+        z: 2
+        visible: root.trainingPlaybackActive && root.recordingBridge
+                 && root.trainingPlaybackVideoPosition >= root.visibleStart
+                 && root.trainingPlaybackVideoPosition <= root.visibleEnd
+        x: {
+            if (!root.recordingBridge)
+                return 0
+            var ratio = (root.trainingPlaybackVideoPosition - root.visibleStart)
+                    / Math.max(0.001, root.visibleEnd - root.visibleStart)
+            return Math.max(0, Math.min(parent.width - width,
+                                        ratio * parent.width - width / 2))
+        }
+        y: 0
+        width: 3
+        height: parent.height
+        color: root.waveformColor
+    }
+
     Text {
         anchors.left: parent.left
         anchors.leftMargin: 8
@@ -239,6 +266,16 @@ Item {
 
     Menu {
         id: recordingMenu
+
+        MenuItem {
+            text: !root.trainingPlaybackActive ? "播放录音"
+                  : (root.trainingPlaybackPlaying
+                     ? "暂停播放录音" : "继续播放录音")
+            enabled: root.recordingBridge && root.recordingBridge.hasRecording
+            onTriggered: root.trainingPlaybackToggleRequested()
+        }
+
+        MenuSeparator {}
 
         MenuItem {
             text: "重置录音对齐"

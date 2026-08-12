@@ -88,6 +88,50 @@ impl VideoLibraryRepository {
         self.list_videos_by_status("completed")
     }
 
+    pub fn last_position(&self, video_path: &str) -> els_types::AppResult<f64> {
+        let position = self
+            .connection()?
+            .query_row(
+                "SELECT last_position FROM video WHERE path = ?1",
+                params![video_path],
+                |row| row.get::<_, f64>(0),
+            )
+            .optional()
+            .map_err(sqlite_error)?
+            .unwrap_or(0.0);
+        Ok(if position.is_finite() {
+            position.max(0.0)
+        } else {
+            0.0
+        })
+    }
+
+    pub fn save_last_position(
+        &mut self,
+        video_path: &str,
+        position_secs: f64,
+    ) -> els_types::AppResult<()> {
+        if video_path.trim().is_empty()
+            || !position_secs.is_finite()
+            || position_secs.is_sign_negative()
+        {
+            return Err(els_types::AppError::InvalidArgument(
+                "playback position requires a video path and a non-negative time".to_string(),
+            ));
+        }
+        let changed = self
+            .connection()?
+            .execute(
+                "UPDATE video SET last_position = ?1 WHERE path = ?2",
+                params![position_secs, video_path],
+            )
+            .map_err(sqlite_error)?;
+        if changed == 0 {
+            return Err(els_types::AppError::NotFound);
+        }
+        Ok(())
+    }
+
     fn list_videos_by_status(
         &self,
         learning_status: &str,
@@ -397,6 +441,37 @@ mod tests {
         assert_eq!(
             repository.list_in_progress().expect("reload videos").len(),
             1
+        );
+
+        drop(repository);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn persists_last_playback_position_without_resetting_it_on_reopen() {
+        let db_path = temporary_database("video-progress");
+        let mut repository = VideoLibraryRepository::open_path(&db_path).expect("open repository");
+        repository
+            .record_opened("/tmp/lesson.mp4", "lesson.mp4", 120.0)
+            .expect("record video");
+        assert_eq!(
+            repository
+                .last_position("/tmp/lesson.mp4")
+                .expect("initial position"),
+            0.0
+        );
+
+        repository
+            .save_last_position("/tmp/lesson.mp4", 42.5)
+            .expect("save position");
+        repository
+            .record_opened("/tmp/lesson.mp4", "Lesson.mp4", 121.0)
+            .expect("reopen video");
+        assert_eq!(
+            repository
+                .last_position("/tmp/lesson.mp4")
+                .expect("restored position"),
+            42.5
         );
 
         drop(repository);

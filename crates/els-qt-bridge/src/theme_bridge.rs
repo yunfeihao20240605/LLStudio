@@ -9,6 +9,11 @@ use cxx_qt_lib::QString;
 const AUTO_MODE: &str = "auto";
 const LIGHT_MODE: &str = "light";
 const DARK_MODE: &str = "dark";
+const PAPER_MODE: &str = "paper";
+const SKY_MODE: &str = "sky";
+const MIDNIGHT_MODE: &str = "midnight";
+const AURORA_MODE: &str = "aurora";
+const TWILIGHT_MODE: &str = "twilight";
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -127,26 +132,53 @@ impl qobject::ThemeBridge {
     }
 
     fn report_error(mut self: Pin<&mut Self>, message: &QString) -> bool {
-        self.as_mut().set_last_error(QString::from(message.to_string()));
+        self.as_mut()
+            .set_last_error(QString::from(message.to_string()));
         true
     }
 }
 
 fn is_valid_theme_mode(theme_mode: &str) -> bool {
-    matches!(theme_mode, AUTO_MODE | LIGHT_MODE | DARK_MODE)
+    matches!(
+        theme_mode,
+        AUTO_MODE
+            | LIGHT_MODE
+            | DARK_MODE
+            | PAPER_MODE
+            | SKY_MODE
+            | MIDNIGHT_MODE
+            | AURORA_MODE
+            | TWILIGHT_MODE
+    )
 }
 
 fn next_theme_mode(theme_mode: &str) -> &'static str {
     match theme_mode {
         AUTO_MODE => LIGHT_MODE,
         LIGHT_MODE => DARK_MODE,
+        DARK_MODE => MIDNIGHT_MODE,
+        MIDNIGHT_MODE => AURORA_MODE,
+        AURORA_MODE => TWILIGHT_MODE,
+        TWILIGHT_MODE => PAPER_MODE,
+        PAPER_MODE => SKY_MODE,
         _ => AUTO_MODE,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ThemeBridgeRust;
+    use super::{is_valid_theme_mode, next_theme_mode, ThemeBridgeRust};
+
+    #[test]
+    fn dark_theme_variants_are_valid_and_in_cycle_order() {
+        assert!(is_valid_theme_mode("midnight"));
+        assert!(is_valid_theme_mode("aurora"));
+        assert!(is_valid_theme_mode("twilight"));
+        assert_eq!(next_theme_mode("dark"), "midnight");
+        assert_eq!(next_theme_mode("midnight"), "aurora");
+        assert_eq!(next_theme_mode("aurora"), "twilight");
+        assert_eq!(next_theme_mode("twilight"), "paper");
+    }
 
     #[test]
     fn default_theme_mode_is_auto_and_persisted() {

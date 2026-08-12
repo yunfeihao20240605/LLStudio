@@ -18,6 +18,12 @@ els-recording-core = { path = "../els-recording-core" }
 els-audio-capture = { path = "../els-audio-capture" }
 els-learning-core = { path = "../els-learning-core" }
 els-storage = { path = "../els-storage" }
+els-ai-core = { path = "../els-ai-core" }
+els-speech-core = { path = "../els-speech-core" }
+els-audio-export = { path = "../els-audio-export" }
+els-speech-tencent = { path = "../els-speech-tencent" }
+serde_json.workspace = true
+serde.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true

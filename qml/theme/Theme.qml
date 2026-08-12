@@ -13,6 +13,26 @@ Item {
         id: darkPalette
     }
 
+    PalettePaper {
+        id: paperPalette
+    }
+
+    PaletteSky {
+        id: skyPalette
+    }
+
+    PaletteMidnight {
+        id: midnightPalette
+    }
+
+    PaletteAurora {
+        id: auroraPalette
+    }
+
+    PaletteTwilight {
+        id: twilightPalette
+    }
+
     SystemPalette {
         id: systemPalette
         colorGroup: SystemPalette.Active
@@ -26,18 +46,51 @@ Item {
         if (mode === "light") {
             return "light"
         }
+        if (mode === "paper") {
+            return "paper"
+        }
+        if (mode === "sky") {
+            return "sky"
+        }
+        if (mode === "midnight") {
+            return "midnight"
+        }
+        if (mode === "aurora") {
+            return "aurora"
+        }
+        if (mode === "twilight") {
+            return "twilight"
+        }
         return systemPrefersDark ? "dark" : "light"
     }
-    readonly property var palette: effectiveMode === "dark" ? darkPalette : lightPalette
+    readonly property bool darkAppearance: effectiveMode === "dark"
+                                                || effectiveMode === "midnight"
+                                                || effectiveMode === "aurora"
+                                                || effectiveMode === "twilight"
+    readonly property var activePalette: {
+        if (effectiveMode === "dark")
+            return darkPalette
+        if (effectiveMode === "midnight")
+            return midnightPalette
+        if (effectiveMode === "aurora")
+            return auroraPalette
+        if (effectiveMode === "twilight")
+            return twilightPalette
+        if (effectiveMode === "paper")
+            return paperPalette
+        if (effectiveMode === "sky")
+            return skyPalette
+        return lightPalette
+    }
 
-    readonly property color windowBg: palette.windowBg
-    readonly property color panelBg: palette.panelBg
-    readonly property color elevatedBg: palette.elevatedBg
-    readonly property color border: palette.border
-    readonly property color textPrimary: palette.textPrimary
-    readonly property color textSecondary: palette.textSecondary
-    readonly property color accent: palette.accent
-    readonly property color accentBg: palette.accentBg
+    readonly property color windowBg: activePalette.windowBg
+    readonly property color panelBg: activePalette.panelBg
+    readonly property color elevatedBg: activePalette.elevatedBg
+    readonly property color border: activePalette.border
+    readonly property color textPrimary: activePalette.textPrimary
+    readonly property color textSecondary: activePalette.textSecondary
+    readonly property color accent: activePalette.accent
+    readonly property color accentBg: activePalette.accentBg
 
     function luminance(color) {
         return (color.r * 0.299) + (color.g * 0.587) + (color.b * 0.114)

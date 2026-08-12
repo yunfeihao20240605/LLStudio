@@ -48,6 +48,24 @@ impl SubtitleTrack {
         })
     }
 
+    /// 返回时间点对应的唯一字幕。允许极小的起点误差；字幕重叠时，
+    /// 选择开始时间最晚的一条，使新字幕在其起点处优先显示。
+    pub fn cue_index_at(&self, timestamp_secs: f64) -> Option<usize> {
+        if !timestamp_secs.is_finite() {
+            return None;
+        }
+
+        self.cues
+            .iter()
+            .enumerate()
+            .filter(|(_, cue)| {
+                timestamp_secs + CUE_START_MATCH_TOLERANCE_SECS >= cue.range.start
+                    && timestamp_secs < cue.range.end
+            })
+            .max_by(|(_, left), (_, right)| left.range.start.total_cmp(&right.range.start))
+            .map(|(index, _)| index)
+    }
+
     pub fn add_or_update_for_range(
         &mut self,
         range: els_types::TimeRange,
@@ -141,9 +159,8 @@ impl SubtitleProvider for SubtitleTrack {
     }
 
     fn cue_at(&self, timestamp_secs: f64) -> Option<&SubtitleCue> {
-        self.cues
-            .iter()
-            .find(|cue| timestamp_secs >= cue.range.start && timestamp_secs < cue.range.end)
+        self.cue_index_at(timestamp_secs)
+            .and_then(|index| self.cues.get(index))
     }
 }
 
@@ -270,5 +287,34 @@ mod tests {
             }),
             None
         );
+    }
+
+    #[test]
+    fn prefers_the_latest_starting_cue_in_an_overlap() {
+        let mut track = SubtitleTrack::default();
+        track
+            .add_or_update_for_range(
+                TimeRange {
+                    start: 230.345,
+                    end: 233.164,
+                },
+                "previous subtitle",
+            )
+            .expect("add previous cue");
+        track
+            .add_or_update_for_range(
+                TimeRange {
+                    start: 233.007,
+                    end: 235.010,
+                },
+                "current subtitle",
+            )
+            .expect("add overlapping cue");
+
+        assert_eq!(track.cue_index_at(233.000), Some(0));
+        assert_eq!(track.cue_index_at(233.006646), Some(1));
+        assert_eq!(track.cue_index_at(233.100), Some(1));
+        assert_eq!(track.cue_index_at(235.010), None);
+        assert_eq!(track.cue_index_at(f64::NAN), None);
     }
 }

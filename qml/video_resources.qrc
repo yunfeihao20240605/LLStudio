@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="/qt/qml/com/yfhao/els/app">
+    <file alias="video-placeholder.svg">video-placeholder.svg</file>
+    <file alias="video-empty-decoration.svg">video-empty-decoration.svg</file>
+    <file alias="llstudio-brand.png">llstudio-brand.png</file>
+    <file alias="llstudio-brand-light.png">llstudio-brand-light.png</file>
+  </qresource>
+</RCC>

@@ -151,7 +151,7 @@ Rectangle {
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "搜索视频/字幕/单词"
+                            text: "搜索视频/字幕"
                             color: textSecondary
                             font.pixelSize: 13
                         }

@@ -41,7 +41,7 @@ pub struct MpvHandle {
 }
 
 impl MpvHandle {
-    pub fn new() -> els_types::AppResult<Self> {
+    pub fn new_with_keep_open(keep_open: bool) -> els_types::AppResult<Self> {
         Self::set_mpv_numeric_locale();
         let raw = NonNull::new(unsafe { mpv_create() }).ok_or_else(|| {
             els_types::AppError::Io("libmpv failed to create player handle".to_string())
@@ -51,7 +51,7 @@ impl MpvHandle {
         handle.set_option_string("config", "no")?;
         handle.set_option_string("vo", "libmpv")?;
         handle.set_option_string("terminal", "no")?;
-        handle.set_option_string("keep-open", "no")?;
+        handle.set_option_string("keep-open", if keep_open { "yes" } else { "no" })?;
         handle.set_option_string("idle", "yes")?;
         handle.set_option_string("pause", "yes")?;
         handle.set_option_string("keepaspect", "yes")?;
@@ -66,14 +66,9 @@ impl MpvHandle {
     }
 
     fn set_mpv_numeric_locale() {
-        std::env::set_var("LC_ALL", "C");
         std::env::set_var("LC_NUMERIC", "C");
-        std::env::set_var("LANG", "C");
         unsafe {
-            libc::setenv(c"LC_ALL".as_ptr(), c"C".as_ptr(), 1);
             libc::setenv(c"LC_NUMERIC".as_ptr(), c"C".as_ptr(), 1);
-            libc::setenv(c"LANG".as_ptr(), c"C".as_ptr(), 1);
-            libc::setlocale(libc::LC_ALL, c"C".as_ptr());
             libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr());
         }
     }

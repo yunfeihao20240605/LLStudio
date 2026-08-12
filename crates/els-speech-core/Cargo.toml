@@ -1,0 +1,10 @@
+[package]
+name = "els-speech-core"
+version.workspace = true
+edition.workspace = true
+description = "协议无关的语音识别模型、能力与提供商注册表。"
+
+[dependencies]
+els-types = { path = "../els-types" }
+serde.workspace = true
+serde_json.workspace = true

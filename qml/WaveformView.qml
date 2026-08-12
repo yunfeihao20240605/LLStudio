@@ -15,7 +15,15 @@ Rectangle {
     property var subtitleBridge
     property var waveformBridge
     property var recordingBridge
+    property bool recordingTrainingActive: false
+    property bool recordingPlaybackPlaying: false
+    property real recordingPlaybackPosition: 0
+    property bool originalTrainingActive: false
+    property bool originalPlaybackPlaying: false
+    property bool contextMenuOnOriginalTrack: false
     property bool canBeginNextSegment: false
+    property bool speechRecognizing: false
+    readonly property bool compactMode: width < 720
     property real zoomFactor: 1.0
     property real minimumZoom: 1.0
     property real maximumZoom: 1000.0
@@ -25,8 +33,8 @@ Rectangle {
                                               && recordingBridge.hasRecording
                                               && recordingBridge.recordingPeakValues.length > 0
     readonly property real waveformBackgroundLuminance: elevatedBg.r * 0.2126 + elevatedBg.g * 0.7152 + elevatedBg.b * 0.0722
-    readonly property color playheadColor: waveformBackgroundLuminance > 0.55 ? "#111827" : "#ffffff"
-    readonly property color playheadTextColor: waveformBackgroundLuminance > 0.55 ? "#ffffff" : "#111827"
+    readonly property color playheadColor: accent
+    readonly property color playheadTextColor: "#ffffff"
     readonly property color selectionStartMarkerColor: waveformBackgroundLuminance > 0.55 ? "#15803d" : "#4ade80"
     readonly property color selectionEndMarkerColor: waveformBackgroundLuminance > 0.55 ? "#c2410c" : "#fb923c"
     readonly property color waveformColor: waveformBackgroundLuminance > 0.55 ? "#cfd4dc" : "#6b7280"
@@ -38,6 +46,10 @@ Rectangle {
     signal recordingStartRequested()
     signal recordingStopRequested()
     signal recordingDeleteRequested()
+    signal recordingTrainingToggleRequested()
+    signal recordingPlaybackSeekRequested(real positionSecs)
+    signal originalTrainingToggleRequested()
+    signal speechRecognitionRequested(real startSecs, real endSecs)
 
     function formatSeconds(totalSeconds) {
         var safe = Math.max(0, Math.floor(totalSeconds || 0))
@@ -267,6 +279,19 @@ Rectangle {
         id: waveformContextMenu
 
         MenuItem {
+            visible: root.contextMenuOnOriginalTrack
+            text: !root.originalTrainingActive ? "播放原音"
+                  : (root.originalPlaybackPlaying
+                     ? "暂停播放原音" : "继续播放原音")
+            enabled: root.waveformBridge && root.waveformBridge.durationSecs > 0
+            onTriggered: root.originalTrainingToggleRequested()
+        }
+
+        MenuSeparator {
+            visible: root.contextMenuOnOriginalTrack
+        }
+
+        MenuItem {
             text: waveformBridge
                   && waveformBridge.hasSelectionStart
                   && waveformBridge.hasSelectionEnd
@@ -284,6 +309,20 @@ Rectangle {
                                      : waveformBridge.currentPosition,
                             hasRange)
             }
+        }
+
+        MenuSeparator {}
+
+        MenuItem {
+            text: root.speechRecognizing ? "正在识别当前片段…" : "识别当前片段字幕"
+            enabled: !root.speechRecognizing
+                     && waveformBridge
+                     && waveformBridge.hasSelectionStart
+                     && waveformBridge.hasSelectionEnd
+                     && waveformBridge.selectionEnd > waveformBridge.selectionStart
+            onTriggered: root.speechRecognitionRequested(
+                             waveformBridge.selectionStart,
+                             waveformBridge.selectionEnd)
         }
 
         MenuSeparator {}
@@ -314,6 +353,7 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
+            spacing: root.compactMode ? 6 : 8
 
             Text {
                 text: "波形视图"
@@ -322,63 +362,79 @@ Rectangle {
                 font.bold: true
             }
 
-            Button {
+            ThemedToolButton {
+                Layout.preferredWidth: 44
                 text: "−"
                 enabled: root.zoomFactor > root.minimumZoom
                 onClicked: root.setZoom(root.zoomFactor - 0.5)
+                panelColor: root.panelBg
+                borderColor: root.borderColor
+                textColor: root.textPrimary
+                disabledTextColor: root.textSecondary
+                accentColor: root.accent
+                accentBackgroundColor: root.accentBg
             }
 
-            Slider {
-                Layout.preferredWidth: 150
+            ThemedSlider {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 72
+                Layout.maximumWidth: 150
                 from: root.minimumZoom
                 to: root.maximumZoom
                 stepSize: 0.5
                 value: root.zoomFactor
                 onMoved: root.setZoom(value)
+                panelColor: root.panelBg
+                trackColor: root.borderColor
+                accentColor: root.accent
             }
 
-            Button {
+            ThemedToolButton {
+                Layout.preferredWidth: 44
                 text: "+"
                 enabled: root.zoomFactor < root.maximumZoom
                 onClicked: root.setZoom(root.zoomFactor + 0.5)
+                panelColor: root.panelBg
+                borderColor: root.borderColor
+                textColor: root.textPrimary
+                disabledTextColor: root.textSecondary
+                accentColor: root.accent
+                accentBackgroundColor: root.accentBg
             }
 
             Text {
                 text: root.zoomFactor.toFixed(1) + "x"
                 color: textSecondary
                 font.pixelSize: 13
-                Layout.preferredWidth: 38
+                Layout.preferredWidth: 48
             }
 
-            Button {
+            ThemedToolButton {
                 text: root.followPlayback ? "自动跟随" : "恢复跟随"
                 onClicked: {
                     root.followPlayback = true
                     root.centerOnTime(waveformBridge ? waveformBridge.currentPosition : 0)
                 }
+                panelColor: root.panelBg
+                borderColor: root.borderColor
+                textColor: root.textPrimary
+                disabledTextColor: root.textSecondary
+                accentColor: root.accent
+                accentBackgroundColor: root.accentBg
             }
 
-            CheckBox {
-                id: showSelectionCheckBox
-                text: "显示选区"
-                checked: true
-                onCheckedChanged: root.requestWaveformPaint()
-            }
-
-            Item {
+            Text {
                 Layout.fillWidth: true
-            }
-
-            Text {
-                text: "总时长：" + formatSeconds(durationSecs())
+                Layout.minimumWidth: 0
+                text: waveformBridge
+                      ? "已加载：" + waveformBridge.loadedBinCount
+                        + "/" + waveformBridge.totalBinCount + " bins"
+                      : ""
                 color: textSecondary
-                font.pixelSize: 13
-            }
-
-            Text {
-                text: waveformBridge ? ("已加载：" + waveformBridge.loadedBinCount + "/" + waveformBridge.totalBinCount + " bins") : ""
-                color: textSecondary
-                font.pixelSize: 13
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideRight
+                maximumLineCount: 1
             }
         }
 
@@ -459,7 +515,7 @@ Rectangle {
                     }
 
                     Rectangle {
-                        visible: showSelectionCheckBox.checked && root.selectionIsValid()
+                        visible: root.selectionIsValid()
                         x: root.timeToContentX(selectionStart())
                         y: waveformContent.trackTop
                         width: root.timeToContentX(selectionEnd()) - x
@@ -516,8 +572,7 @@ Rectangle {
                             var amplitudeHeight = Math.max(1,
                                     waveformContent.trackHeight * 0.42)
                             var loadedCount = useDetail ? totalBins : waveformBridge.loadedBinCount
-                            var selectionVisible = showSelectionCheckBox.checked
-                                    && root.selectionIsValid()
+                            var selectionVisible = root.selectionIsValid()
                             var unloadedColor = Qt.rgba(0.81, 0.83, 0.86, 0.35)
                             var maximumVisiblePeak = 0
                             for (var peakIndex = firstBin; peakIndex < lastBin; ++peakIndex) {
@@ -630,12 +685,25 @@ Rectangle {
                         visibleStart: root.visibleStart()
                         visibleEnd: root.visibleEnd()
                         displayGain: root.waveformDisplayGain
+                        trainingPlaybackActive: root.recordingTrainingActive
+                        trainingPlaybackPlaying: root.recordingPlaybackPlaying
+                        trainingPlaybackPosition: root.recordingPlaybackPosition
                         borderColor: root.borderColor
                         textColor: root.textPrimary
                         highlightColor: root.accent
                         onSeekRequested: function(positionSecs) {
-                            root.playbackPositionRequested(positionSecs)
+                            if (root.recordingTrainingActive && root.recordingBridge) {
+                                var localPosition = positionSecs
+                                        - root.recordingBridge.targetStart
+                                root.recordingPlaybackSeekRequested(root.clamp(
+                                    localPosition, 0,
+                                    root.recordingBridge.recordingDuration))
+                            } else {
+                                root.playbackPositionRequested(positionSecs)
+                            }
                         }
+                        onTrainingPlaybackToggleRequested:
+                            root.recordingTrainingToggleRequested()
                         onAlignmentCommitRequested: function(offsetSecs) {
                             if (root.recordingBridge)
                                 root.recordingBridge.saveAlignmentOffset(offsetSecs)
@@ -650,7 +718,7 @@ Rectangle {
                     Rectangle {
                         id: selectionStartMarker
                         z: 6
-                        visible: showSelectionCheckBox.checked && waveformBridge && waveformBridge.hasSelectionStart
+                        visible: waveformBridge && waveformBridge.hasSelectionStart
                         x: root.clamp(root.timeToContentX(waveformBridge ? waveformBridge.selectionStart : 0) - width / 2, 0, waveformContent.width - width)
                         y: waveformContent.trackTop
                         width: 3
@@ -707,7 +775,7 @@ Rectangle {
                     Rectangle {
                         id: selectionEndMarker
                         z: 6
-                        visible: showSelectionCheckBox.checked && waveformBridge && waveformBridge.hasSelectionEnd
+                        visible: waveformBridge && waveformBridge.hasSelectionEnd
                         x: root.clamp(root.timeToContentX(waveformBridge ? waveformBridge.selectionEnd : 0) - width / 2, 0, waveformContent.width - width)
                         y: waveformContent.trackTop
                         width: 3
@@ -763,6 +831,7 @@ Rectangle {
 
                     Rectangle {
                         z: 5
+                        visible: !root.recordingTrainingActive
                         x: root.timeToContentX(waveformBridge ? waveformBridge.currentPosition : 0)
                         y: 22
                         width: 3
@@ -772,13 +841,14 @@ Rectangle {
 
                     Rectangle {
                         z: 7
+                        visible: !root.recordingTrainingActive
                         x: root.clamp(root.timeToContentX(waveformBridge ? waveformBridge.currentPosition : 0) - 22, 0, waveformContent.width - width)
                         y: 12
                         width: 56
                         height: 24
                         radius: 8
                         color: root.playheadColor
-                        border.color: root.waveformBackgroundLuminance > 0.55 ? "#ffffff" : "#111827"
+                        border.color: root.accentBg
                         border.width: 1
 
                         Text {
@@ -796,6 +866,10 @@ Rectangle {
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: function(mouse) {
                             if (mouse.button === Qt.RightButton) {
+                                var trackTop = waveformContent.trackTop
+                                var trackBottom = trackTop + waveformContent.trackHeight
+                                root.contextMenuOnOriginalTrack = mouse.y >= trackTop
+                                        && mouse.y < trackBottom
                                 waveformContextMenu.popup()
                                 return
                             }
@@ -806,98 +880,117 @@ Rectangle {
             }
         }
 
-        RowLayout {
+        GridLayout {
             Layout.fillWidth: true
+            columns: root.compactMode ? 1 : 2
+            columnSpacing: 8
+            rowSpacing: 6
 
-            Repeater {
-                model: [
-                    { label: root.selectionLengthLabel(), width: 170 }
-                ]
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
 
-                delegate: Rectangle {
-                    Layout.preferredWidth: modelData.width
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 100
+                    Layout.maximumWidth: 170
                     Layout.preferredHeight: 34
                     radius: 8
                     color: elevatedBg
                     border.color: borderColor
 
                     Text {
-                        anchors.centerIn: parent
-                        text: modelData.label
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: root.selectionLengthLabel()
                         color: textPrimary
                         font.pixelSize: 13
+                        verticalAlignment: Text.AlignVCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: waveformBridge
+                             && waveformBridge.hasSelectionStart
+                             && waveformBridge.hasSelectionEnd
+                             && !root.selectionIsValid()
+                    text: "A 必须早于 B"
+                    color: root.selectionEndMarkerColor
+                    font.pixelSize: 12
+                    elide: Text.ElideRight
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignRight
+                spacing: 8
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                Button {
+                    visible: root.recordingBridge && root.recordingBridge.hasVideo
+                    Layout.preferredWidth: 124
+                    enabled: root.recordingBridge
+                             && root.recordingBridge.hasTarget
+                             && !root.recordingBridge.isProcessing
+                    text: root.recordingBridge && root.recordingBridge.isRecording
+                          ? "■  停止 " + root.formatRecordingTime(
+                                root.recordingBridge.recordingElapsed)
+                          : (root.recordingBridge && root.recordingBridge.isProcessing
+                             ? "处理中" : "●  录音")
+                    onClicked: {
+                        if (root.recordingBridge.isRecording)
+                            root.recordingStopRequested()
+                        else
+                            root.recordingStartRequested()
+                    }
+                    ToolTip.visible: hovered
+                    ToolTip.text: root.recordingBridge
+                                  ? root.recordingBridge.statusMessage : ""
+                }
+
+                ThemedToolButton {
+                    Layout.preferredWidth: 92
+                    text: waveformBridge && waveformBridge.hasSelectionStart
+                          ? "A " + formatSeconds(waveformBridge.selectionStart)
+                          : "设置 A"
+                    enabled: waveformBridge
+                    panelColor: root.panelBg
+                    borderColor: root.borderColor
+                    textColor: root.textPrimary
+                    disabledTextColor: root.textSecondary
+                    accentColor: root.accent
+                    accentBackgroundColor: root.accentBg
+                    onClicked: {
+                        if (waveformBridge)
+                            waveformBridge.markSelectionStart(waveformBridge.currentPosition)
+                    }
+                }
+
+                ThemedToolButton {
+                    Layout.preferredWidth: 92
+                    text: waveformBridge && waveformBridge.hasSelectionEnd
+                          ? "B " + formatSeconds(waveformBridge.selectionEnd)
+                          : "设置 B"
+                    enabled: waveformBridge
+                    panelColor: root.panelBg
+                    borderColor: root.borderColor
+                    textColor: root.textPrimary
+                    disabledTextColor: root.textSecondary
+                    accentColor: root.accent
+                    accentBackgroundColor: root.accentBg
+                    onClicked: {
+                        if (waveformBridge)
+                            waveformBridge.markSelectionEnd(waveformBridge.currentPosition)
                     }
                 }
             }
-
-            Text {
-                visible: waveformBridge
-                         && waveformBridge.hasSelectionStart
-                         && waveformBridge.hasSelectionEnd
-                         && !root.selectionIsValid()
-                text: "A 必须早于 B"
-                color: root.selectionEndMarkerColor
-                font.pixelSize: 12
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            Button {
-                visible: root.recordingBridge && root.recordingBridge.hasVideo
-                enabled: root.recordingBridge
-                         && root.recordingBridge.hasTarget
-                         && !root.recordingBridge.isProcessing
-                text: root.recordingBridge && root.recordingBridge.isRecording
-                      ? "■  停止 " + root.formatRecordingTime(
-                            root.recordingBridge.recordingElapsed)
-                      : (root.recordingBridge && root.recordingBridge.isProcessing
-                         ? "处理中" : "●  录音")
-                onClicked: {
-                    if (root.recordingBridge.isRecording)
-                        root.recordingStopRequested()
-                    else
-                        root.recordingStartRequested()
-                }
-                ToolTip.visible: hovered
-                ToolTip.text: root.recordingBridge
-                              ? root.recordingBridge.statusMessage : ""
-            }
-
-            Button {
-                Layout.preferredWidth: 92
-                text: waveformBridge && waveformBridge.hasSelectionStart
-                      ? "A " + formatSeconds(waveformBridge.selectionStart)
-                      : "设置 A"
-                enabled: waveformBridge
-                onClicked: {
-                    if (waveformBridge)
-                        waveformBridge.markSelectionStart(waveformBridge.currentPosition)
-                }
-            }
-
-            Button {
-                Layout.preferredWidth: 92
-                text: waveformBridge && waveformBridge.hasSelectionEnd
-                      ? "B " + formatSeconds(waveformBridge.selectionEnd)
-                      : "设置 B"
-                enabled: waveformBridge
-                onClicked: {
-                    if (waveformBridge)
-                        waveformBridge.markSelectionEnd(waveformBridge.currentPosition)
-                }
-            }
-
-            Button {
-                text: "同步字幕选区"
-                enabled: subtitleBridge && subtitleBridge.activeCueEnd > subtitleBridge.activeCueStart
-                onClicked: {
-                    if (waveformBridge && subtitleBridge)
-                        waveformBridge.setSelectionRange(subtitleBridge.activeCueStart, subtitleBridge.activeCueEnd)
-                }
-            }
-
         }
     }
 }

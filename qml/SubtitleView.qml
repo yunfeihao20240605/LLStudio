@@ -15,10 +15,19 @@ Rectangle {
     property var subtitleBridge
     property var noteBridge
     property var waveformBridge
+    property var aiBridge
     property int activeTab: 0
     property var subtitleEntries: []
+    property string savedEditorText: ""
+    readonly property bool hasUnsavedSubtitleChanges: selectionIsValid()
+                                                               && subtitleEditor.text
+                                                                  !== savedEditorText
+    readonly property bool isUpdatingSubtitle: subtitleBridge
+                                                && subtitleBridge.editingCueIndex >= 0
 
     signal noteNavigationRequested(real startSecs, real endSecs, bool hasRange)
+    signal aiSubtitleContextRequested(int cueIndex, real startSecs, real endSecs, string text)
+    signal subtitleSaveSucceeded(string message)
 
     function selectionIsValid() {
         return waveformBridge
@@ -92,16 +101,41 @@ Rectangle {
         }
         subtitleBridge.syncSelectionRange(waveformBridge.selectionStart,
                                           waveformBridge.selectionEnd)
+        syncAiContextFromEditingCue()
+    }
+
+    function syncAiContextFromEditingCue() {
+        if (!subtitleBridge || subtitleBridge.editingCueIndex < 0)
+            return
+        for (var i = 0; i < subtitleEntries.length; ++i) {
+            var cue = subtitleEntries[i]
+            if (cue.index === subtitleBridge.editingCueIndex) {
+                root.aiSubtitleContextRequested(cue.index, cue.start, cue.end, cue.text)
+                return
+            }
+        }
     }
 
     function saveEditorText() {
         if (!subtitleBridge || !selectionIsValid()
                 || subtitleEditor.text.trim().length === 0)
-            return
+            return false
+        var wasEditingExistingCue = subtitleBridge.editingCueIndex >= 0
         if (subtitleBridge.saveCueForRange(waveformBridge.selectionStart,
                                            waveformBridge.selectionEnd,
-                                           subtitleEditor.text))
+                                           subtitleEditor.text)) {
+            savedEditorText = subtitleBridge.editingText
             clearEditorFocus()
+            root.subtitleSaveSucceeded(wasEditingExistingCue
+                                       ? "字幕更新成功" : "字幕创建成功")
+            return true
+        }
+        return false
+    }
+
+    function discardUnsavedSubtitleChanges() {
+        subtitleEditor.text = savedEditorText
+        clearEditorFocus()
     }
 
     function clearEditorFocus() {
@@ -110,6 +144,7 @@ Rectangle {
             root.forceActiveFocus(Qt.MouseFocusReason)
         }
         noteView.clearEditorFocus()
+        aiPanel.clearInputFocus()
     }
 
     function clearEditorFocusIfOutside(sourceItem, sourceX, sourceY) {
@@ -125,6 +160,7 @@ Rectangle {
             }
         }
         noteView.clearEditorFocusIfOutside(sourceItem, sourceX, sourceY)
+        aiPanel.clearInputFocusIfOutside(sourceItem, sourceX, sourceY)
     }
 
     function showNoteEditor() {
@@ -132,10 +168,22 @@ Rectangle {
         Qt.callLater(function() { noteView.focusEditor() })
     }
 
+    function applyRecognizedText(text, startSecs, endSecs) {
+        if (!selectionIsValid()
+                || Math.abs(waveformBridge.selectionStart - startSecs) > 0.005
+                || Math.abs(waveformBridge.selectionEnd - endSecs) > 0.005)
+            return false
+        activeTab = 0
+        subtitleEditor.text = text.trim()
+        subtitleEditor.forceActiveFocus(Qt.OtherFocusReason)
+        return true
+    }
+
     Component.onCompleted: {
         updateSubtitleEntries()
         syncSelectionEditor()
         subtitleEditor.text = subtitleBridge ? subtitleBridge.editingText : ""
+        savedEditorText = subtitleEditor.text
     }
 
     radius: 16
@@ -155,7 +203,13 @@ Rectangle {
         function onActiveCueIndexChanged() { root.ensureActiveCueVisible() }
 
         function onEditingTextChanged() {
-            subtitleEditor.text = root.subtitleBridge ? root.subtitleBridge.editingText : ""
+            var text = root.subtitleBridge ? root.subtitleBridge.editingText : ""
+            root.savedEditorText = text
+            subtitleEditor.text = text
+        }
+
+        function onEditingCueIndexChanged() {
+            root.syncAiContextFromEditingCue()
         }
     }
 
@@ -185,32 +239,10 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-
-            Text {
-                text: "字幕与笔记"
-                color: root.textPrimary
-                font.pixelSize: 16
-                font.bold: true
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Text {
-                visible: root.activeTab !== 2
-                text: root.activeTab === 0
-                      ? root.subtitleEntries.length + " 条字幕"
-                      : (root.noteBridge ? root.noteBridge.noteCount : 0) + " 条笔记"
-                color: root.textSecondary
-                font.pixelSize: 12
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
             spacing: 0
 
             Repeater {
-                model: ["字幕", "笔记", "单词"]
+                model: ["字幕", "笔记", "AI"]
 
                 delegate: Rectangle {
                     Layout.fillWidth: true
@@ -300,6 +332,10 @@ Rectangle {
                             root.subtitleBridge.selectCue(modelData.index)
                         if (root.waveformBridge)
                             root.waveformBridge.setSelectionRange(modelData.start, modelData.end)
+                        root.aiSubtitleContextRequested(modelData.index,
+                                                        modelData.start,
+                                                        modelData.end,
+                                                        modelData.text)
                     }
                 }
             }
@@ -336,6 +372,7 @@ Rectangle {
                     }
 
                     Button {
+                        id: saveSubtitleButton
                         text: root.subtitleBridge && root.subtitleBridge.editingCueIndex >= 0
                               ? "更新字幕" : "添加字幕"
                         enabled: root.subtitleBridge
@@ -343,6 +380,28 @@ Rectangle {
                                  && root.selectionIsValid()
                                  && subtitleEditor.text.trim().length > 0
                         onClicked: root.saveEditorText()
+
+                        contentItem: Text {
+                            text: saveSubtitleButton.text
+                            color: saveSubtitleButton.enabled
+                                   ? "#ffffff" : root.textSecondary
+                            opacity: saveSubtitleButton.enabled ? 1 : 0.72
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        background: Rectangle {
+                            radius: 7
+                            color: saveSubtitleButton.enabled
+                                   ? (saveSubtitleButton.down
+                                      ? Qt.darker(root.accent, 1.12)
+                                      : root.accent)
+                                   : root.panelBg
+                            border.color: saveSubtitleButton.enabled
+                                          ? root.accent : root.borderColor
+                            border.width: 1
+                        }
                     }
                 }
 
@@ -357,6 +416,18 @@ Rectangle {
                                              : "设置 A、B 后可添加字幕"
                     wrapMode: TextEdit.Wrap
                     selectByMouse: true
+                    color: enabled ? root.textPrimary : root.textSecondary
+                    placeholderTextColor: root.textSecondary
+                    selectionColor: root.accent
+                    selectedTextColor: "#ffffff"
+
+                    background: Rectangle {
+                        color: root.panelBg
+                        radius: 6
+                        border.color: subtitleEditor.activeFocus
+                                      ? root.accent : root.borderColor
+                        border.width: subtitleEditor.activeFocus ? 2 : 1
+                    }
 
                     Keys.onPressed: function(event) {
                         if ((event.modifiers & Qt.ControlModifier)
@@ -375,6 +446,7 @@ Rectangle {
             Layout.fillHeight: true
             visible: root.activeTab === 1
             noteBridge: root.noteBridge
+            panelBg: root.panelBg
             elevatedBg: root.elevatedBg
             borderColor: root.borderColor
             textPrimary: root.textPrimary
@@ -386,14 +458,20 @@ Rectangle {
             }
         }
 
-        Text {
+        AiPanel {
+            id: aiPanel
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: root.activeTab === 2
-            text: "单词功能尚未实现"
-            color: root.textSecondary
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+            aiBridge: root.aiBridge
+            panelBg: root.panelBg
+            elevatedBg: root.elevatedBg
+            borderColor: root.borderColor
+            textPrimary: root.textPrimary
+            textSecondary: root.textSecondary
+            accent: root.accent
+            accentBg: root.accentBg
         }
     }
+
 }
