@@ -60,6 +60,15 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "selectCue"]
         fn select_cue(self: Pin<&mut SubtitleBridge>, cue_index: i32) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "updateCueRange"]
+        fn update_cue_range(
+            self: Pin<&mut SubtitleBridge>,
+            cue_index: i32,
+            start_secs: f64,
+            end_secs: f64,
+        ) -> bool;
     }
 }
 
@@ -240,6 +249,38 @@ impl qobject::SubtitleBridge {
     fn select_cue(mut self: Pin<&mut Self>, cue_index: i32) -> bool {
         self.as_mut().set_editing_cue(cue_index);
         cue_index >= 0 && (cue_index as usize) < self.rust().track.cues().len()
+    }
+
+    fn update_cue_range(
+        mut self: Pin<&mut Self>,
+        cue_index: i32,
+        start_secs: f64,
+        end_secs: f64,
+    ) -> bool {
+        let Some(subtitle_path) = self.rust().subtitle_path.clone() else {
+            return false;
+        };
+        if cue_index < 0 {
+            return false;
+        }
+        let previous_track = self.rust().track.clone();
+        let updated_index = match self.as_mut().rust_mut().track.update_cue_range(
+            cue_index as usize,
+            els_types::TimeRange { start: start_secs, end: end_secs },
+        ) {
+            Ok(index) => index,
+            Err(error) => return self.as_mut().report_error("更新字幕时间失败", error),
+        };
+        if let Err(error) = self.rust().track.save_srt(&subtitle_path.to_string_lossy()) {
+            self.as_mut().rust_mut().track = previous_track;
+            return self.as_mut().report_error("保存字幕时间失败", error);
+        }
+        self.as_mut().refresh_entries();
+        self.as_mut().set_editing_cue(updated_index as i32);
+        let playback_position = self.rust().playback_position;
+        self.as_mut().sync_playback_position(playback_position);
+        self.as_mut().set_status_message(QString::from("字幕时间已同步"));
+        true
     }
 }
 

@@ -547,6 +547,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "els-audio-processing"
+version = "0.1.0"
+dependencies = [
+ "els-types",
+]
+
+[[package]]
 name = "els-learning-core"
 version = "0.1.0"
 dependencies = [
@@ -581,6 +588,7 @@ dependencies = [
  "els-ai-core",
  "els-audio-capture",
  "els-audio-export",
+ "els-audio-processing",
  "els-learning-core",
  "els-media-core",
  "els-note-core",

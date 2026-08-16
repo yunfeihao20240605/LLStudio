@@ -23,11 +23,25 @@ pub trait RecordingRepository {
         video_id: i64,
         range: els_types::TimeRange,
     ) -> els_types::AppResult<Option<Recording>>;
+    fn list_ranges(&self, video_id: i64) -> els_types::AppResult<Vec<els_types::TimeRange>>;
     fn update_alignment(
         &mut self,
         recording_id: i64,
         video_id: i64,
         offset_secs: f64,
+    ) -> els_types::AppResult<()>;
+    fn save_variant(
+        &mut self,
+        recording_id: i64,
+        video_id: i64,
+        variant: &str,
+        file_path: &str,
+    ) -> els_types::AppResult<()>;
+    fn set_active_variant(
+        &mut self,
+        recording_id: i64,
+        video_id: i64,
+        variant: &str,
     ) -> els_types::AppResult<()>;
     fn delete(&mut self, recording_id: i64, video_id: i64) -> els_types::AppResult<()>;
 }

@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS recording (
     duration REAL NOT NULL,
     sample_rate INTEGER NOT NULL,
     alignment_offset REAL NOT NULL DEFAULT 0,
+    active_variant TEXT NOT NULL DEFAULT 'original',
+    denoised_light_path TEXT,
+    denoised_standard_path TEXT,
+    denoised_strong_path TEXT,
     created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_recording_range

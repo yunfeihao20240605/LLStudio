@@ -91,6 +91,9 @@ impl crate::MediaController for Player {
 
     fn play(&mut self) -> els_types::AppResult<()> {
         self.ensure_loaded()?;
+        // An explicit play request supersedes the paused-frame preparation
+        // scheduled by load(). Otherwise the next tick can pause audio again.
+        self.pending_initial_position_secs = None;
         self.with_mpv(|mpv| mpv.set_pause(false))?;
         self.state = PlayerState::Playing;
         Ok(())
@@ -122,6 +125,9 @@ impl crate::MediaController for Player {
 
         self.with_mpv(|mpv| mpv.seek_absolute(position_secs))?;
         self.current_position_secs = position_secs;
+        // The caller selected the playback position explicitly. Do not let a
+        // stale initial-frame target seek back and pause on the next tick.
+        self.pending_initial_position_secs = None;
         Ok(())
     }
 

@@ -22,6 +22,7 @@ pub mod qobject {
         #[qproperty(f64, current_position, cxx_name = "currentPosition")]
         #[qproperty(f64, duration)]
         #[qproperty(f64, playback_rate, cxx_name = "playbackRate")]
+        #[qproperty(bool, has_playable_overlap, cxx_name = "hasPlayableOverlap")]
         #[qproperty(QString, loaded_path, cxx_name = "loadedPath")]
         #[qproperty(QString, status_message, cxx_name = "statusMessage")]
         type RecordingPlaybackBridge = super::RecordingPlaybackBridgeRust;
@@ -66,6 +67,7 @@ pub struct RecordingPlaybackBridgeRust {
     current_position: f64,
     duration: f64,
     playback_rate: f64,
+    has_playable_overlap: bool,
     loaded_path: QString,
     status_message: QString,
     player: els_media_core::Player,
@@ -85,6 +87,7 @@ impl Default for RecordingPlaybackBridgeRust {
             current_position: 0.0,
             duration: 0.0,
             playback_rate: 1.0,
+            has_playable_overlap: false,
             loaded_path: QString::from(""),
             status_message: QString::from("尚未加载录音"),
             player: els_media_core::Player::new_audio_playback(),
@@ -117,13 +120,16 @@ impl RecordingPlaybackBridgeRust {
         Ok(())
     }
 
-    fn sync_audio(&mut self, timeline_position: f64, force_seek: bool) -> els_types::AppResult<()> {
+    /// Returns `true` once playback can advance. A `false` result means mpv is
+    /// still loading after a seek retry, so the selection clock must stay frozen.
+    fn sync_audio(&mut self, timeline_position: f64, force_seek: bool) -> els_types::AppResult<bool> {
         let recording_position = self
             .timeline
             .and_then(|timeline| timeline.recording_position_at(timeline_position));
         if !self.is_playing || recording_position.is_none() {
             self.seek_retry_pending = false;
-            return self.pause_audio();
+            self.pause_audio()?;
+            return Ok(true);
         }
 
         let recording_position = recording_position.unwrap_or_default();
@@ -138,13 +144,13 @@ impl RecordingPlaybackBridgeRust {
                     self.player.load(&path)?;
                     self.seek_retry_pending = true;
                 }
-                return Ok(());
+                return Ok(false);
             }
             self.player.play()?;
             self.audio_is_playing = true;
             self.seek_retry_pending = false;
         }
-        Ok(())
+        Ok(true)
     }
 }
 
@@ -169,6 +175,7 @@ impl qobject::RecordingPlaybackBridge {
                 self.as_mut().rust_mut().seek_retry_pending = false;
                 self.as_mut().set_current_position(0.0);
                 self.as_mut().set_duration(recording_duration);
+                self.as_mut().set_has_playable_overlap(false);
                 self.as_mut().set_is_playing(false);
                 self.as_mut().set_has_recording(true);
                 self.as_mut().set_loaded_path(QString::from(&path));
@@ -202,11 +209,16 @@ impl qobject::RecordingPlaybackBridge {
         let position = timeline.clamp_position(position);
         self.as_mut().rust_mut().timeline = Some(timeline);
         self.as_mut().rust_mut().timeline_anchor = position;
-        self.as_mut().rust_mut().timeline_started_at = was_playing.then(Instant::now);
+        self.as_mut().rust_mut().timeline_started_at = None;
         self.as_mut().set_current_position(position);
         self.as_mut().set_duration(timeline.selection_duration());
-        if let Err(error) = self.as_mut().rust_mut().sync_audio(position, true) {
-            return self.as_mut().report_error("更新录音对齐失败", error);
+        self.as_mut().set_has_playable_overlap(timeline.has_overlap());
+        match self.as_mut().rust_mut().sync_audio(position, true) {
+            Ok(true) if was_playing => {
+                self.as_mut().rust_mut().timeline_started_at = Some(Instant::now())
+            }
+            Ok(_) => {}
+            Err(error) => return self.as_mut().report_error("更新录音对齐失败", error),
         }
         true
     }
@@ -227,6 +239,7 @@ impl qobject::RecordingPlaybackBridge {
         self.as_mut().set_current_position(0.0);
         self.as_mut().set_duration(0.0);
         self.as_mut().set_playback_rate(1.0);
+        self.as_mut().set_has_playable_overlap(false);
         self.as_mut().set_loaded_path(QString::from(""));
         self.as_mut()
             .set_status_message(QString::from("尚未加载录音"));
@@ -239,10 +252,12 @@ impl qobject::RecordingPlaybackBridge {
         }
         let position = self.rust().current_position;
         self.as_mut().rust_mut().timeline_anchor = position;
-        self.as_mut().rust_mut().timeline_started_at = Some(Instant::now());
+        self.as_mut().rust_mut().timeline_started_at = None;
         self.as_mut().set_is_playing(true);
-        if let Err(error) = self.as_mut().rust_mut().sync_audio(position, true) {
-            return self.as_mut().report_error("播放录音失败", error);
+        match self.as_mut().rust_mut().sync_audio(position, true) {
+            Ok(true) => self.as_mut().rust_mut().timeline_started_at = Some(Instant::now()),
+            Ok(false) => {}
+            Err(error) => return self.as_mut().report_error("播放录音失败", error),
         }
         self.as_mut()
             .set_status_message(QString::from("正在播放录音"));
@@ -274,10 +289,14 @@ impl qobject::RecordingPlaybackBridge {
         let position = timeline.clamp_position(position_secs);
         let is_playing = self.rust().is_playing;
         self.as_mut().rust_mut().timeline_anchor = position;
-        self.as_mut().rust_mut().timeline_started_at = is_playing.then(Instant::now);
+        self.as_mut().rust_mut().timeline_started_at = None;
         self.as_mut().set_current_position(position);
-        if let Err(error) = self.as_mut().rust_mut().sync_audio(position, true) {
-            return self.as_mut().report_error("定位录音失败", error);
+        match self.as_mut().rust_mut().sync_audio(position, true) {
+            Ok(true) if is_playing => {
+                self.as_mut().rust_mut().timeline_started_at = Some(Instant::now())
+            }
+            Ok(_) => {}
+            Err(error) => return self.as_mut().report_error("定位录音失败", error),
         }
         true
     }
@@ -295,8 +314,10 @@ impl qobject::RecordingPlaybackBridge {
         {
             Ok(()) => {
                 let is_playing = self.rust().is_playing;
+                let clock_was_running = self.rust().timeline_started_at.is_some();
                 self.as_mut().rust_mut().timeline_anchor = position;
-                self.as_mut().rust_mut().timeline_started_at = is_playing.then(Instant::now);
+                self.as_mut().rust_mut().timeline_started_at =
+                    (is_playing && clock_was_running).then(Instant::now);
                 self.as_mut().set_current_position(position);
                 self.as_mut().set_playback_rate(playback_rate);
                 true
@@ -314,6 +335,20 @@ impl qobject::RecordingPlaybackBridge {
             None => return false,
         };
         let position = self.rust().timeline_position_now();
+        if self.rust().timeline_started_at.is_none() {
+            match self.as_mut().rust_mut().sync_audio(position, false) {
+                Ok(true) => {
+                    self.as_mut().rust_mut().timeline_anchor = position;
+                    self.as_mut().rust_mut().timeline_started_at = Some(Instant::now());
+                    self.as_mut().set_current_position(position);
+                    return true;
+                }
+                Ok(false) => return true,
+                Err(error) => {
+                    return self.as_mut().report_error("准备录音播放失败", error);
+                }
+            }
+        }
         let completed = position >= timeline.selection_duration() - 0.001;
 
         if completed {
@@ -329,7 +364,12 @@ impl qobject::RecordingPlaybackBridge {
         }
 
         if self.rust().audio_is_playing {
-            let _ = self.as_mut().rust_mut().player.tick();
+            if let Err(error) = self.as_mut().rust_mut().player.tick() {
+                return self.as_mut().report_error("刷新录音播放器状态失败", error);
+            }
+            if self.rust().player.state() != PlaybackState::Playing {
+                self.as_mut().rust_mut().audio_is_playing = false;
+            }
         }
         if let Err(error) = self.as_mut().rust_mut().sync_audio(position, false) {
             return self.as_mut().report_error("同步录音播放状态失败", error);

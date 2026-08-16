@@ -1,0 +1,7 @@
+[package]
+name = "els-audio-processing"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+els-types = { path = "../els-types" }

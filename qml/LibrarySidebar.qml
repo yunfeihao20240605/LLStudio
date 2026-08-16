@@ -22,6 +22,15 @@ Rectangle {
     property bool selectionAvailable: false
     property real selectionStart: 0
     property real selectionEnd: 0
+    property bool canStartTraining: false
+    property bool isTraining: false
+    property bool hasStartedTraining: false
+    property bool isPlaybackPlaying: false
+    property int completedLoops: 0
+    property int totalLoops: 0
+    property string trainingStatus: ""
+    readonly property int repeatCount: sidebarControlPanel.repeatCount
+    readonly property int intervalSeconds: sidebarControlPanel.intervalSeconds
     readonly property bool hasActiveSegment: segmentBridge && segmentBridge.activeIndex >= 0
     readonly property bool hasDraftSelection: selectionAvailable
                                                && (!hasActiveSegment
@@ -34,6 +43,11 @@ Rectangle {
                                                            : (hasActiveSegment ? segmentBridge.activeEnd : 0)
 
     signal videoOpenRequested(string path)
+    signal startTrainingRequested(int repeatCount, int intervalSeconds)
+
+    function applyTrainingSettings(repeatCount, intervalSeconds) {
+        sidebarControlPanel.applyTrainingSettings(repeatCount, intervalSeconds)
+    }
 
     function revealLearningVideos() {
         selectedLibraryIndex = 0
@@ -761,83 +775,30 @@ Rectangle {
             }
         }
 
-        Rectangle {
+        ControlPanel {
+            id: sidebarControlPanel
             Layout.fillWidth: true
-            Layout.preferredHeight: 250
-            radius: 12
-            color: panelBg
-            border.color: borderColor
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 12
-
-                Text {
-                    text: "当前视频学习片段"
-                    color: textPrimary
-                    font.pixelSize: 16
-                    font.bold: true
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: 10
-                    color: elevatedBg
-                    border.color: root.hasDraftSelection ? textSecondary
-                                                         : (root.hasActiveSegment ? accent
-                                                                                  : borderColor)
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: root.hasCurrentSegment && segmentBridge
-                                  ? segmentBridge.currentVideoTitle : "尚未选择学习片段"
-                            color: textPrimary
-                            font.pixelSize: 15
-                            font.bold: true
-                            elide: Text.ElideMiddle
-                        }
-
-                        Text {
-                            text: root.hasCurrentSegment
-                                  ? root.formatSeconds(root.displayedStart) + " ～ "
-                                    + root.formatSeconds(root.displayedEnd) + " ("
-                                    + Math.max(0, Math.round(root.displayedEnd
-                                                             - root.displayedStart)) + "秒)"
-                                  : "请在波形中设置 A、B 选区"
-                            color: textSecondary
-                            font.pixelSize: 14
-                        }
-
-                        Text {
-                            text: root.hasDraftSelection ? "未保存选区"
-                                  : (root.hasActiveSegment
-                                     ? "重复 ×" + segmentBridge.activeRepeatCount
-                                       + "  间隔 " + segmentBridge.activeIntervalSeconds + "秒"
-                                     : "开始训练后自动保存")
-                            color: root.hasDraftSelection ? textSecondary : textPrimary
-                            font.pixelSize: 13
-                        }
-
-                        Item { Layout.fillHeight: true }
-
-                        Text {
-                            text: root.hasActiveSegment && !root.hasDraftSelection
-                                  ? "历史累计播放 "
-                                    + segmentBridge.activeCompletedLoops + " 次"
-                                  : ""
-                            color: textSecondary
-                            font.pixelSize: 12
-                        }
-                    }
-                }
+            Layout.preferredHeight: root.isTraining || root.totalLoops > 0
+                                    ? 254 : 229
+            canStartTraining: root.canStartTraining
+            isTraining: root.isTraining
+            hasStartedTraining: root.hasStartedTraining
+            isPlaybackPlaying: root.isPlaybackPlaying
+            completedLoops: root.completedLoops
+            totalLoops: root.totalLoops
+            selectionStart: root.selectionStart
+            selectionEnd: root.selectionEnd
+            trainingStatus: root.trainingStatus
+            onStartTrainingRequested: function(repeatCount, intervalSeconds) {
+                root.startTrainingRequested(repeatCount, intervalSeconds)
             }
+            panelBg: root.panelBg
+            elevatedBg: root.elevatedBg
+            borderColor: root.borderColor
+            textPrimary: root.textPrimary
+            textSecondary: root.textSecondary
+            accent: root.accent
+            accentBg: root.accentBg
         }
     }
 }

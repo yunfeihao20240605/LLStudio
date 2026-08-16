@@ -96,6 +96,33 @@ impl SubtitleTrack {
             .ok_or(els_types::AppError::NotFound)
     }
 
+    pub fn update_cue_range(
+        &mut self,
+        index: usize,
+        range: els_types::TimeRange,
+    ) -> els_types::AppResult<usize> {
+        if index >= self.cues.len() {
+            return Err(els_types::AppError::NotFound);
+        }
+        if !valid_range(range) {
+            return Err(els_types::AppError::InvalidArgument(
+                "subtitle requires a valid time range".to_string(),
+            ));
+        }
+        let original_text = self.cues[index].original_text.clone();
+        let translated_text = self.cues[index].translated_text.clone();
+        self.cues[index].range = range;
+        self.sort_cues();
+        self.cues
+            .iter()
+            .position(|cue| {
+                cue.range == range
+                    && cue.original_text == original_text
+                    && cue.translated_text == translated_text
+            })
+            .ok_or(els_types::AppError::NotFound)
+    }
+
     pub fn remove_cue(&mut self, index: usize) -> els_types::AppResult<()> {
         if index >= self.cues.len() {
             return Err(els_types::AppError::NotFound);
@@ -258,6 +285,29 @@ mod tests {
             .expect("add adjacent cue");
         assert_eq!(track.cues().len(), 3);
         assert_eq!(track.cues()[2].original_text, "相邻的新字幕");
+    }
+
+    #[test]
+    fn updating_cue_range_preserves_text_and_reorders_track() {
+        let mut track = SubtitleTrack::default();
+        track
+            .load_from_text(
+                "1\n00:00:01,000 --> 00:00:02,000\nFirst\n\n2\n00:00:03,000 --> 00:00:04,000\nSecond",
+            )
+            .expect("load cues");
+        let updated_index = track
+            .update_cue_range(
+                1,
+                TimeRange {
+                    start: 0.25,
+                    end: 0.75,
+                },
+            )
+            .expect("update range");
+        assert_eq!(updated_index, 0);
+        assert_eq!(track.cues()[0].original_text, "Second");
+        assert_eq!(track.cues()[0].range.start, 0.25);
+        assert_eq!(track.cues()[0].range.end, 0.75);
     }
 
     #[test]

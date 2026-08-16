@@ -10,10 +10,16 @@ Item {
     property real displayGain: 1.8
     property color waveformColor: "#16815d"
     property color borderColor: "#d0d7de"
+    property color menuBackgroundColor: "#ffffff"
+    property color menuHoverColor: "#eaf1fe"
     property color textColor: "#1f2329"
     property color highlightColor: "#2f6fed"
-    property real displayOffset: recordingBridge ? recordingBridge.alignmentOffset : 0
+    property real dragPreviewOffset: 0
     property bool alignmentDragging: false
+    readonly property real effectiveOffset: alignmentDragging
+                                                ? dragPreviewOffset
+                                                : (recordingBridge
+                                                   ? recordingBridge.alignmentOffset : 0)
     property bool trainingPlaybackActive: false
     property bool trainingPlaybackPlaying: false
     property real trainingPlaybackPosition: 0
@@ -26,7 +32,6 @@ Item {
 
     signal seekRequested(real positionSecs)
     signal trainingPlaybackToggleRequested()
-    signal alignmentCommitRequested(real offsetSecs)
     signal resetAlignmentRequested()
     signal deleteRequested()
 
@@ -37,8 +42,10 @@ Item {
     function clampOffset(offset) {
         if (!recordingBridge)
             return 0
-        var minimum = -recordingBridge.recordingDuration + 0.01
-        var maximum = recordingBridge.targetEnd - recordingBridge.targetStart - 0.01
+        var minimum = -recordingBridge.targetStart
+        var maximum = Math.max(0, recordingBridge.videoDuration
+                               - recordingBridge.recordingDuration)
+                - recordingBridge.targetStart
         return Math.max(Math.min(minimum, maximum),
                         Math.min(Math.max(minimum, maximum), offset))
     }
@@ -48,9 +55,25 @@ Item {
         return sign + Math.abs(offset).toFixed(3) + "s"
     }
 
+    function normalizedRenderGain(renderedPeaks, zoom, displayGain) {
+        if (!renderedPeaks || renderedPeaks.length <= 0)
+            return 1
+        var sampledPeaks = renderedPeaks.slice()
+        sampledPeaks.sort(function(left, right) { return left - right })
+        var percentileIndex = Math.floor((sampledPeaks.length - 1) * 0.95)
+        var referencePeak = sampledPeaks[Math.max(0, percentileIndex)]
+        if (!isFinite(referencePeak) || referencePeak <= 0.0001)
+            return 1
+        var zoomProgress = Math.max(0, Math.min(1,
+                                 Math.log(Math.max(1, zoom)) / Math.log(200)))
+        var targetHeight = (0.63 + 0.15 * zoomProgress) * displayGain / 1.8
+        targetHeight = Math.max(0.35, Math.min(0.9, targetHeight))
+        return Math.max(0.25, Math.min(16, targetHeight / referencePeak))
+    }
+
     onVisibleStartChanged: requestPaint()
     onVisibleEndChanged: requestPaint()
-    onDisplayOffsetChanged: requestPaint()
+    onEffectiveOffsetChanged: requestPaint()
     onDisplayGainChanged: requestPaint()
     onWaveformColorChanged: requestPaint()
 
@@ -58,10 +81,8 @@ Item {
         target: root.recordingBridge
         ignoreUnknownSignals: true
 
-        function onRecordingRevisionChanged() { root.requestPaint() }
-        function onAlignmentOffsetChanged() {
-            if (!root.alignmentDragging)
-                root.displayOffset = root.recordingBridge.alignmentOffset
+        function onRecordingRevisionChanged() {
+            root.requestPaint()
         }
     }
 
@@ -97,7 +118,7 @@ Item {
             if (binCount <= 0 || duration <= 0)
                 return
 
-            var startTime = root.recordingBridge.targetStart + root.displayOffset
+            var startTime = root.recordingBridge.targetStart + root.effectiveOffset
             var secondsPerBin = duration / binCount
             var firstBin = Math.max(0, Math.floor((root.visibleStart - startTime)
                                                  / secondsPerBin))
@@ -106,47 +127,122 @@ Item {
             var centerY = height / 2
             var amplitudeHeight = Math.max(1, height * 0.40)
             var pixelsPerBin = secondsPerBin / viewportDuration * width
-            var maximumVisiblePeak = 0
-            for (var peakIndex = firstBin; peakIndex < lastBin; ++peakIndex) {
-                maximumVisiblePeak = Math.max(
-                            maximumVisiblePeak,
-                            Math.abs(peaks[peakIndex * 2]),
-                            Math.abs(peaks[peakIndex * 2 + 1]))
+            var renderedPeaks = []
+            if (pixelsPerBin >= 1) {
+                for (var referenceIndex = firstBin;
+                     referenceIndex < lastBin; ++referenceIndex) {
+                    renderedPeaks.push(Math.max(
+                        Math.abs(peaks[referenceIndex * 2]),
+                        Math.abs(peaks[referenceIndex * 2 + 1])))
+                }
+            } else {
+                var referenceFirstPixel = Math.max(0, Math.floor(
+                    (Math.max(root.visibleStart, startTime) - root.visibleStart)
+                    / viewportDuration * width))
+                var referenceLastPixel = Math.min(Math.ceil(width), Math.ceil(
+                    (Math.min(root.visibleEnd, startTime + duration) - root.visibleStart)
+                    / viewportDuration * width))
+                for (var referencePixel = referenceFirstPixel;
+                     referencePixel < referenceLastPixel; ++referencePixel) {
+                    var referencePixelStart = root.visibleStart
+                            + referencePixel / Math.max(1, width) * viewportDuration
+                    var referencePixelEnd = root.visibleStart
+                            + (referencePixel + 1) / Math.max(1, width) * viewportDuration
+                    var referenceStart = Math.max(firstBin, Math.floor(
+                        (referencePixelStart - startTime) / secondsPerBin))
+                    var referenceEnd = Math.min(lastBin, Math.max(referenceStart + 1,
+                        Math.ceil((referencePixelEnd - startTime) / secondsPerBin)))
+                    var negativeEnergy = 0
+                    var positiveEnergy = 0
+                    var referenceCount = 0
+                    for (var referenceBin = referenceStart;
+                         referenceBin < referenceEnd; ++referenceBin) {
+                        negativeEnergy += peaks[referenceBin * 2]
+                                * peaks[referenceBin * 2]
+                        positiveEnergy += peaks[referenceBin * 2 + 1]
+                                * peaks[referenceBin * 2 + 1]
+                        ++referenceCount
+                    }
+                    renderedPeaks.push(Math.max(
+                        Math.sqrt(negativeEnergy / Math.max(1, referenceCount)),
+                        Math.sqrt(positiveEnergy / Math.max(1, referenceCount))))
+                }
             }
-            var basePeak = maximumVisiblePeak * root.displayGain
-            var autoGain = basePeak > 0.0001
-                    ? Math.max(1, Math.min(16, 0.78 / basePeak)) : 1
-            var renderGain = root.displayGain * autoGain
+            var effectiveZoom = Math.max(1,
+                    root.recordingBridge.videoDuration / viewportDuration)
+            var renderGain = root.normalizedRenderGain(
+                        renderedPeaks, effectiveZoom, root.displayGain)
 
             context.fillStyle = root.waveformColor
             if (pixelsPerBin >= 1) {
-                var barWidth = Math.max(1, Math.min(6, pixelsPerBin * 0.72))
-                for (var index = firstBin; index < lastBin; ++index) {
-                    var x = ((startTime + index * secondsPerBin - root.visibleStart)
-                             / viewportDuration) * width
-                            + (pixelsPerBin - barWidth) * 0.5
-                    drawBar(context, x, barWidth, peaks[index * 2],
-                            peaks[index * 2 + 1], centerY, amplitudeHeight,
-                            renderGain)
+                if (effectiveZoom >= 200) {
+                    for (var index = firstBin; index < lastBin; ++index) {
+                        var nextIndex = Math.min(lastBin - 1, index + 1)
+                        var leftX = ((startTime + index * secondsPerBin
+                                      - root.visibleStart) / viewportDuration) * width
+                        var rightX = ((startTime + (index + 1) * secondsPerBin
+                                       - root.visibleStart) / viewportDuration) * width
+                        var currentMin = Math.max(-1, Math.min(0,
+                            peaks[index * 2] * renderGain))
+                        var currentMax = Math.max(0, Math.min(1,
+                            peaks[index * 2 + 1] * renderGain))
+                        var nextMin = Math.max(-1, Math.min(0,
+                            peaks[nextIndex * 2] * renderGain))
+                        var nextMax = Math.max(0, Math.min(1,
+                            peaks[nextIndex * 2 + 1] * renderGain))
+                        context.beginPath()
+                        context.moveTo(leftX,
+                            centerY - currentMax * amplitudeHeight)
+                        context.lineTo(rightX,
+                            centerY - nextMax * amplitudeHeight)
+                        context.lineTo(rightX,
+                            centerY - nextMin * amplitudeHeight)
+                        context.lineTo(leftX,
+                            centerY - currentMin * amplitudeHeight)
+                        context.closePath()
+                        context.fill()
+                    }
+                } else {
+                    var barWidth = Math.max(1, Math.min(6, pixelsPerBin * 0.72))
+                    for (var index = firstBin; index < lastBin; ++index) {
+                        var x = ((startTime + index * secondsPerBin - root.visibleStart)
+                                 / viewportDuration) * width
+                                + (pixelsPerBin - barWidth) * 0.5
+                        drawBar(context, x, barWidth, peaks[index * 2],
+                                peaks[index * 2 + 1], centerY, amplitudeHeight,
+                                renderGain)
+                    }
                 }
             } else {
-                var binsPerPixel = 1 / Math.max(0.0001, pixelsPerBin)
-                for (var pixel = 0; pixel < Math.ceil(width); ++pixel) {
-                    var binStart = Math.max(firstBin,
-                                            Math.floor(firstBin + pixel * binsPerPixel))
-                    var binEnd = Math.min(lastBin,
-                                          Math.max(binStart + 1,
-                                                   Math.floor(firstBin
-                                                              + (pixel + 1) * binsPerPixel)))
-                    if (binStart >= lastBin)
-                        break
-                    var minimum = 0
-                    var maximum = 0
+                var recordingEndTime = startTime + duration
+                var firstPixel = Math.max(0, Math.floor(
+                    (Math.max(root.visibleStart, startTime) - root.visibleStart)
+                    / viewportDuration * width))
+                var lastPixel = Math.min(Math.ceil(width), Math.ceil(
+                    (Math.min(root.visibleEnd, recordingEndTime) - root.visibleStart)
+                    / viewportDuration * width))
+                for (var pixel = firstPixel; pixel < lastPixel; ++pixel) {
+                    var pixelStartTime = root.visibleStart
+                            + pixel / Math.max(1, width) * viewportDuration
+                    var pixelEndTime = root.visibleStart
+                            + (pixel + 1) / Math.max(1, width) * viewportDuration
+                    var binStart = Math.max(firstBin, Math.floor(
+                        (pixelStartTime - startTime) / secondsPerBin))
+                    var binEnd = Math.min(lastBin, Math.max(binStart + 1,
+                        Math.ceil((pixelEndTime - startTime) / secondsPerBin)))
+                    var negativeEnergy = 0
+                    var positiveEnergy = 0
+                    var aggregateCount = 0
                     for (var bin = binStart; bin < binEnd; ++bin) {
-                        minimum = Math.min(minimum, peaks[bin * 2])
-                        maximum = Math.max(maximum, peaks[bin * 2 + 1])
+                        negativeEnergy += peaks[bin * 2] * peaks[bin * 2]
+                        positiveEnergy += peaks[bin * 2 + 1] * peaks[bin * 2 + 1]
+                        ++aggregateCount
                     }
-                    drawBar(context, pixel, 1, minimum, maximum,
+                    var rmsMinimum = -Math.sqrt(
+                                negativeEnergy / Math.max(1, aggregateCount))
+                    var rmsMaximum = Math.sqrt(
+                                positiveEnergy / Math.max(1, aggregateCount))
+                    drawBar(context, pixel, 1, rmsMinimum, rmsMaximum,
                             centerY, amplitudeHeight, renderGain)
                 }
             }
@@ -205,7 +301,7 @@ Item {
         Text {
             id: offsetText
             anchors.centerIn: parent
-            text: root.formatOffset(root.displayOffset)
+            text: root.formatOffset(root.dragPreviewOffset)
             color: "#ffffff"
             font.pixelSize: 12
             font.bold: true
@@ -226,12 +322,12 @@ Item {
             root.pressX = mouse.x
             root.pressOffset = root.recordingBridge
                     ? root.recordingBridge.alignmentOffset : 0
-            root.displayOffset = root.pressOffset
+            root.dragPreviewOffset = root.pressOffset
             root.alignmentDragging = false
         }
 
         onPositionChanged: function(mouse) {
-            if (!pressed || (pressedButtons & Qt.LeftButton) === 0)
+            if (!pressed || (mouse.buttons & Qt.LeftButton) === 0)
                 return
             var deltaX = mouse.x - root.pressX
             if (!root.alignmentDragging && Math.abs(deltaX) < 5)
@@ -239,7 +335,7 @@ Item {
             root.alignmentDragging = true
             var seconds = deltaX / Math.max(1, width)
                     * Math.max(0.001, root.visibleEnd - root.visibleStart)
-            root.displayOffset = root.clampOffset(root.pressOffset + seconds)
+            root.dragPreviewOffset = root.clampOffset(root.pressOffset + seconds)
         }
 
         onReleased: function(mouse) {
@@ -248,7 +344,9 @@ Item {
                 return
             }
             if (root.alignmentDragging) {
-                root.alignmentCommitRequested(root.displayOffset)
+                if (root.recordingBridge)
+                    root.recordingBridge.saveAlignmentOffset(
+                                root.dragPreviewOffset)
                 root.alignmentDragging = false
             } else {
                 var position = root.visibleStart + mouse.x / Math.max(1, width)
@@ -259,15 +357,18 @@ Item {
 
         onCanceled: {
             root.alignmentDragging = false
-            root.displayOffset = root.recordingBridge
-                    ? root.recordingBridge.alignmentOffset : 0
         }
     }
 
-    Menu {
+    ThemedMenu {
         id: recordingMenu
+        panelColor: root.menuBackgroundColor
+        borderColor: root.borderColor
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textColor
+            disabledTextColor: root.textColor
+            hoverColor: root.menuHoverColor
             text: !root.trainingPlaybackActive ? "播放录音"
                   : (root.trainingPlaybackPlaying
                      ? "暂停播放录音" : "继续播放录音")
@@ -275,16 +376,22 @@ Item {
             onTriggered: root.trainingPlaybackToggleRequested()
         }
 
-        MenuSeparator {}
+        ThemedMenuSeparator { separatorColor: root.borderColor }
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textColor
+            disabledTextColor: root.textColor
+            hoverColor: root.menuHoverColor
             text: "重置录音对齐"
             enabled: root.recordingBridge
                      && Math.abs(root.recordingBridge.alignmentOffset) > 0.0005
             onTriggered: root.resetAlignmentRequested()
         }
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textColor
+            disabledTextColor: root.textColor
+            hoverColor: root.menuHoverColor
             text: "删除录音"
             onTriggered: root.deleteRequested()
         }

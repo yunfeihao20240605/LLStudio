@@ -4,10 +4,13 @@ use core::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QList, QString};
 use els_learning_core::LearningManager;
+use els_recording_core::RecordingManager;
 use std::path::Path;
 
 type SegmentManager =
     els_learning_core::DefaultLearningManager<els_storage::SqliteSegmentRepository>;
+type RecordingsManager =
+    els_recording_core::DefaultRecordingManager<els_storage::SqliteRecordingRepository>;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -136,6 +139,26 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "segmentLabelAt"]
         fn segment_label_at(self: Pin<&mut SegmentBridge>, index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "segmentHasRecordingAt"]
+        fn segment_has_recording_at(self: Pin<&mut SegmentBridge>, index: i32) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "previewActiveRange"]
+        fn preview_active_range(
+            self: Pin<&mut SegmentBridge>, start_secs: f64, end_secs: f64
+        ) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "commitActiveRange"]
+        fn commit_active_range(
+            self: Pin<&mut SegmentBridge>, start_secs: f64, end_secs: f64
+        ) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "refreshRecordingRanges"]
+        fn refresh_recording_ranges(self: Pin<&mut SegmentBridge>) -> bool;
     }
 }
 
@@ -155,8 +178,10 @@ pub struct SegmentBridgeRust {
     label_playback_range_count: i32,
     label_playback_label: QString,
     manager: SegmentManager,
+    recording_manager: RecordingsManager,
     current_video_id: Option<i64>,
     segments: Vec<els_learning_core::Segment>,
+    recording_ranges: Vec<els_types::TimeRange>,
     recent_labels: Vec<String>,
     label_playback_plan: Option<els_learning_core::LabelPlaybackPlan>,
 }
@@ -179,8 +204,12 @@ impl Default for SegmentBridgeRust {
             label_playback_range_count: 0,
             label_playback_label: QString::from(""),
             manager: SegmentManager::new(els_storage::SqliteSegmentRepository::default()),
+            recording_manager: RecordingsManager::new(
+                els_storage::SqliteRecordingRepository::default(),
+            ),
             current_video_id: None,
             segments: Vec::new(),
+            recording_ranges: Vec::new(),
             recent_labels: Vec::new(),
             label_playback_plan: None,
         }
@@ -193,6 +222,7 @@ impl qobject::SegmentBridge {
         if path.trim().is_empty() {
             self.as_mut().rust_mut().current_video_id = None;
             self.as_mut().rust_mut().segments.clear();
+            self.as_mut().rust_mut().recording_ranges.clear();
             self.as_mut().rust_mut().recent_labels.clear();
             self.as_mut().set_segment_count(0);
             self.as_mut().set_recent_label_count(0);
@@ -231,6 +261,9 @@ impl qobject::SegmentBridge {
         self.as_mut().set_current_video_path(QString::from(&path));
         self.as_mut().set_current_video_title(QString::from(&title));
         self.as_mut().refresh_list_properties();
+        if !self.as_mut().refresh_recording_ranges() {
+            return false;
+        }
         self.as_mut().clear_active_segment();
         self.as_mut().clear_label_playback_plan();
         self.as_mut()
@@ -638,6 +671,85 @@ impl qobject::SegmentBridge {
             .unwrap_or_else(|| QString::from(""))
     }
 
+    fn segment_has_recording_at(self: Pin<&mut Self>, index: i32) -> bool {
+        let Some(segment) = self.rust().segments.get(index.max(0) as usize) else {
+            return false;
+        };
+        self.rust().recording_ranges.iter().any(|range| {
+            (range.start - segment.range.start).abs() <= 0.001
+                && (range.end - segment.range.end).abs() <= 0.001
+        })
+    }
+
+    fn preview_active_range(mut self: Pin<&mut Self>, start_secs: f64, end_secs: f64) -> bool {
+        if !valid_segment_range(start_secs, end_secs) || self.rust().active_index < 0 {
+            return false;
+        }
+        let index = self.rust().active_index as usize;
+        {
+            let mut rust = self.as_mut().rust_mut();
+            let Some(segment) = rust.segments.get_mut(index) else {
+                return false;
+            };
+            segment.range = els_types::TimeRange { start: start_secs, end: end_secs };
+        }
+        self.as_mut().set_active_start(start_secs);
+        self.as_mut().set_active_end(end_secs);
+        self.as_mut().bump_revision();
+        true
+    }
+
+    fn commit_active_range(mut self: Pin<&mut Self>, start_secs: f64, end_secs: f64) -> bool {
+        if !self.as_mut().preview_active_range(start_secs, end_secs) {
+            return false;
+        }
+        let active_id = self
+            .rust()
+            .segments
+            .get(self.rust().active_index as usize)
+            .and_then(|segment| segment.id);
+        let Some(segment) = self
+            .rust()
+            .segments
+            .get(self.rust().active_index as usize)
+            .cloned()
+        else {
+            return false;
+        };
+        if let Err(error) = self.as_mut().rust_mut().manager.add_segment(segment) {
+            return self.as_mut().report_error("更新片段时间失败", error);
+        }
+        if !self.as_mut().reload_segments() {
+            return false;
+        }
+        let Some(index) = self
+            .rust()
+            .segments
+            .iter()
+            .position(|segment| segment.id == active_id)
+        else {
+            return false;
+        };
+        self.as_mut().activate_segment(index as i32);
+        self.as_mut().set_status_message(QString::from("片段时间已同步"));
+        true
+    }
+
+    fn refresh_recording_ranges(mut self: Pin<&mut Self>) -> bool {
+        let Some(video_id) = self.rust().current_video_id else {
+            self.as_mut().rust_mut().recording_ranges.clear();
+            self.as_mut().bump_revision();
+            return false;
+        };
+        let ranges = match self.rust().recording_manager.list_ranges(video_id) {
+            Ok(ranges) => ranges,
+            Err(error) => return self.as_mut().report_error("读取片段录音状态失败", error),
+        };
+        self.as_mut().rust_mut().recording_ranges = ranges;
+        self.as_mut().bump_revision();
+        true
+    }
+
     fn reload_segments(mut self: Pin<&mut Self>) -> bool {
         let video_id = match self.rust().current_video_id {
             Some(video_id) => video_id,
@@ -714,6 +826,10 @@ fn matching_segment_index(
         (segment.range.start - start_secs).abs() < TIME_TOLERANCE_SECS
             && (segment.range.end - end_secs).abs() < TIME_TOLERANCE_SECS
     })
+}
+
+fn valid_segment_range(start_secs: f64, end_secs: f64) -> bool {
+    start_secs.is_finite() && end_secs.is_finite() && start_secs >= 0.0 && end_secs > start_secs
 }
 
 #[cfg(test)]

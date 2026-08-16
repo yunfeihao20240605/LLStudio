@@ -11,12 +11,20 @@ ApplicationWindow {
     id: root
     property string successMessage: ""
     property int pendingSegmentIndex: -1
+    property bool pendingSegmentTraining: false
+    property bool pendingSegmentRecordingTraining: false
+    property int pendingRecordingTrainingIndex: -1
 
     property bool videoFullScreen: false
     property int visibilityBeforeVideoFullScreen: Window.Windowed
     property bool deferRecordingTargetSync: false
     property int segmentActivationRevision: 0
     property int pendingReadySegmentIndex: -1
+    property bool recordingOperationActive: false
+    property bool selectionAdjustmentActive: false
+    property int selectionAdjustmentCueIndex: -1
+    property real selectionAdjustmentOriginalStart: 0
+    property real selectionAdjustmentOriginalEnd: 0
 
     function setVideoFullScreen(enabled) {
         if (videoFullScreen === enabled)
@@ -71,11 +79,16 @@ ApplicationWindow {
         if (!recordingBridge.hasRecording
                 || !recordingPlaybackBridge.hasRecording)
             return false
+        if (!recordingPlaybackBridge.hasPlayableOverlap) {
+            themeBridge.reportError("录音与当前选区没有重叠")
+            return false
+        }
+        themeBridge.reportError("")
 
         if (trainingController.hasActiveSession) {
             if (trainingController.isRecordingSession) {
-                startOrContinueTraining(controlPanel.repeatCount,
-                                        controlPanel.intervalSeconds)
+                startOrContinueTraining(librarySidebar.repeatCount,
+                                        librarySidebar.intervalSeconds)
                 return true
             }
             trainingController.stopTraining()
@@ -86,16 +99,16 @@ ApplicationWindow {
         recordingPlaybackBridge.applyPlaybackRate(mediaBridge.playbackRate)
         return trainingController.startRecordingTraining(
                     recordingPlaybackBridge.duration,
-                    controlPanel.repeatCount,
-                    controlPanel.intervalSeconds)
+                    librarySidebar.repeatCount,
+                    librarySidebar.intervalSeconds)
     }
 
     function toggleOriginalTraining() {
         if (trainingController.isRecordingSession)
-            return switchTrainingSource(controlPanel.repeatCount,
-                                        controlPanel.intervalSeconds)
-        startOrContinueTraining(controlPanel.repeatCount,
-                                controlPanel.intervalSeconds)
+            return switchTrainingSource(librarySidebar.repeatCount,
+                                        librarySidebar.intervalSeconds)
+        startOrContinueTraining(librarySidebar.repeatCount,
+                                librarySidebar.intervalSeconds)
         return true
     }
 
@@ -109,6 +122,11 @@ ApplicationWindow {
             trainingController.stopTraining()
 
         if (switchToRecording) {
+            if (!recordingPlaybackBridge.hasPlayableOverlap) {
+                themeBridge.reportError("录音与当前选区没有重叠")
+                return false
+            }
+            themeBridge.reportError("")
             mediaBridge.pause()
             videoPlaybackPane.syncPlaybackDependentPanels()
             recordingPlaybackBridge.applyPlaybackRate(mediaBridge.playbackRate)
@@ -149,6 +167,35 @@ ApplicationWindow {
         }
     }
 
+    function prepareRecordingVariantChange() {
+        if (trainingController.hasActiveSession
+                && trainingController.isRecordingSession)
+            trainingController.stopTraining()
+        recordingPlaybackBridge.pause()
+    }
+
+    function processRecordingNoiseReduction(profile) {
+        prepareRecordingVariantChange()
+        recordingOperationActive = true
+        if (!recordingBridge.processNoiseReduction(profile)) {
+            recordingOperationActive = false
+            themeBridge.reportError(recordingBridge.statusMessage)
+            return
+        }
+        successMessage = recordingBridge.statusMessage
+    }
+
+    function useOriginalRecording() {
+        prepareRecordingVariantChange()
+        recordingOperationActive = true
+        if (!recordingBridge.useOriginalRecording()) {
+            recordingOperationActive = false
+            themeBridge.reportError(recordingBridge.statusMessage)
+            return
+        }
+        successMessage = recordingBridge.statusMessage
+    }
+
     function syncRecordingTargetFromSelection() {
         var hasRange = waveformBridge.hasSelectionStart
                 && waveformBridge.hasSelectionEnd
@@ -156,6 +203,39 @@ ApplicationWindow {
         recordingBridge.syncTargetRange(waveformBridge.selectionStart,
                                         waveformBridge.selectionEnd,
                                         hasRange)
+    }
+
+    function beginSelectionAdjustment() {
+        if (segmentBridge.activeIndex < 0)
+            return
+        selectionAdjustmentActive = true
+        selectionAdjustmentCueIndex = subtitleBridge.editingCueIndex
+        selectionAdjustmentOriginalStart = segmentBridge.activeStart
+        selectionAdjustmentOriginalEnd = segmentBridge.activeEnd
+        subtitleView.beginSelectionAdjustment()
+    }
+
+    function commitSelectionAdjustment(startSecs, endSecs) {
+        if (!selectionAdjustmentActive)
+            return false
+        selectionAdjustmentActive = false
+        var cueIndex = selectionAdjustmentCueIndex
+        selectionAdjustmentCueIndex = -1
+        var originalStart = selectionAdjustmentOriginalStart
+        var originalEnd = selectionAdjustmentOriginalEnd
+        var validRange = isFinite(startSecs) && isFinite(endSecs)
+                && startSecs >= 0 && endSecs > startSecs
+        if (!validRange) {
+            segmentBridge.previewActiveRange(originalStart, originalEnd)
+            subtitleView.endSelectionAdjustment()
+            return false
+        }
+        var segmentUpdated = segmentBridge.commitActiveRange(startSecs, endSecs)
+        if (segmentUpdated && cueIndex >= 0)
+            subtitleBridge.updateCueRange(cueIndex, startSecs, endSecs)
+        subtitleView.endSelectionAdjustment()
+        root.syncRecordingTargetFromSelection()
+        return segmentUpdated
     }
 
     function startLabelTraining(index) {
@@ -175,8 +255,8 @@ ApplicationWindow {
 
         return trainingController.startRangeSequence(
                     ranges,
-                    controlPanel.repeatCount,
-                    controlPanel.intervalSeconds,
+                    librarySidebar.repeatCount,
+                    librarySidebar.intervalSeconds,
                     segmentBridge.labelPlaybackLabel)
     }
 
@@ -185,8 +265,8 @@ ApplicationWindow {
             return
 
         if (trainingController.hasActiveSession) {
-            startOrContinueTraining(controlPanel.repeatCount,
-                                    controlPanel.intervalSeconds)
+            startOrContinueTraining(librarySidebar.repeatCount,
+                                    librarySidebar.intervalSeconds)
             return
         }
 
@@ -195,7 +275,8 @@ ApplicationWindow {
             return
         }
 
-        startOrContinueTraining(controlPanel.repeatCount, controlPanel.intervalSeconds)
+        startOrContinueTraining(librarySidebar.repeatCount,
+                                librarySidebar.intervalSeconds)
     }
 
     function toggleNormalPlayback() {
@@ -274,8 +355,8 @@ ApplicationWindow {
         waveformBridge.setSelectionRange(segmentBridge.activeStart,
                                          segmentBridge.activeEnd)
         subtitleView.syncSelectionEditor()
-        controlPanel.applyTrainingSettings(segmentBridge.activeRepeatCount,
-                                           segmentBridge.activeIntervalSeconds)
+        librarySidebar.applyTrainingSettings(segmentBridge.activeRepeatCount,
+                                              segmentBridge.activeIntervalSeconds)
         var seeked = videoPlaybackPane.seekToPosition(segmentBridge.activeStart)
         pendingReadySegmentIndex = !seeked && mediaBridge.preparingInitialFrame
                 ? index : -1
@@ -313,10 +394,68 @@ ApplicationWindow {
         activateLearningSegment(index)
     }
 
+    function startSegmentTraining(index) {
+        if (index < 0 || index >= segmentBridge.segmentCount)
+            return false
+        if (subtitleView.hasUnsavedSubtitleChanges) {
+            pendingSegmentIndex = index
+            pendingSegmentTraining = true
+            unsavedSubtitleDialog.open()
+            return true
+        }
+        if (index !== segmentBridge.activeIndex)
+            activateLearningSegment(index)
+        else
+            syncActiveLearningSegment(index)
+        librarySidebar.applyTrainingSettings(segmentBridge.activeRepeatCount,
+                                              segmentBridge.activeIntervalSeconds)
+        return toggleOriginalTraining()
+    }
+
+    function tryStartPendingRecordingTraining() {
+        var index = pendingRecordingTrainingIndex
+        if (index < 0 || index !== segmentBridge.activeIndex
+                || !recordingPlaybackBridge.hasRecording
+                || !recordingPlaybackBridge.hasPlayableOverlap)
+            return false
+        pendingRecordingTrainingIndex = -1
+        librarySidebar.applyTrainingSettings(segmentBridge.activeRepeatCount,
+                                              segmentBridge.activeIntervalSeconds)
+        return toggleRecordingTraining()
+    }
+
+    function startSegmentRecordingTraining(index) {
+        if (index < 0 || index >= segmentBridge.segmentCount
+                || !segmentBridge.segmentHasRecordingAt(index))
+            return false
+        if (subtitleView.hasUnsavedSubtitleChanges) {
+            pendingSegmentIndex = index
+            pendingSegmentTraining = true
+            pendingSegmentRecordingTraining = true
+            unsavedSubtitleDialog.open()
+            return true
+        }
+        pendingRecordingTrainingIndex = index
+        if (index !== segmentBridge.activeIndex)
+            activateLearningSegment(index)
+        else
+            syncActiveLearningSegment(index)
+        Qt.callLater(root.tryStartPendingRecordingTraining)
+        return true
+    }
+
     function activatePendingLearningSegment() {
         var index = pendingSegmentIndex
+        var shouldTrain = pendingSegmentTraining
+        var shouldUseRecording = pendingSegmentRecordingTraining
         pendingSegmentIndex = -1
-        if (index >= 0)
+        pendingSegmentTraining = false
+        pendingSegmentRecordingTraining = false
+        if (index >= 0 && shouldUseRecording) {
+            startSegmentRecordingTraining(index)
+        } else if (index >= 0 && shouldTrain) {
+            startSegmentTraining(index)
+        } else if (index >= 0)
             activateLearningSegment(index)
     }
 
@@ -520,12 +659,48 @@ ApplicationWindow {
         function onAlignmentOffsetChanged() {
             recordingPlaybackSyncTimer.restart()
         }
+        function onRecordingRevisionChanged() {
+            segmentBridge.refreshRecordingRanges()
+        }
+        function onStatusMessageChanged() {
+            if (!root.recordingOperationActive)
+                return
+            root.successMessage = recordingBridge.statusMessage
+            if (recordingBridge.statusMessage.indexOf("失败") >= 0) {
+                themeBridge.reportError(recordingBridge.statusMessage)
+                root.recordingOperationActive = false
+            }
+        }
+        function onIsProcessingChanged() {
+            if (root.recordingOperationActive && !recordingBridge.isProcessing) {
+                root.successMessage = recordingBridge.statusMessage
+                successMessageTimer.restart()
+                root.recordingOperationActive = false
+            }
+        }
+    }
+
+    Connections {
+        target: recordingPlaybackBridge
+        function onHasRecordingChanged() {
+            root.tryStartPendingRecordingTraining()
+        }
+        function onHasPlayableOverlapChanged() {
+            root.tryStartPendingRecordingTraining()
+        }
     }
 
     Connections {
         target: waveformBridge
         function onSelectionRevisionChanged() {
-            if (!root.deferRecordingTargetSync)
+            if (root.selectionAdjustmentActive
+                    && segmentBridge.activeIndex >= 0) {
+                segmentBridge.previewActiveRange(
+                            waveformBridge.selectionStart,
+                            waveformBridge.selectionEnd)
+            }
+            if (!root.deferRecordingTargetSync
+                    && !root.selectionAdjustmentActive)
                 root.syncRecordingTargetFromSelection()
         }
     }
@@ -663,6 +838,36 @@ ApplicationWindow {
             Platform.MenuItem { text: "开始训练"; onTriggered: root.toggleTrainingPlayback() }
         }
         Platform.Menu {
+            title: "麦克风"
+            Platform.Menu {
+                title: "录音降噪"
+                enabled: recordingBridge.hasRecording
+                         && !recordingBridge.isRecording
+                         && !recordingBridge.isProcessing
+                Platform.MenuItem {
+                    text: "轻度"
+                    onTriggered: root.processRecordingNoiseReduction("light")
+                }
+                Platform.MenuItem {
+                    text: "标准"
+                    onTriggered: root.processRecordingNoiseReduction("standard")
+                }
+                Platform.MenuItem {
+                    text: "强力"
+                    onTriggered: root.processRecordingNoiseReduction("strong")
+                }
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: "使用原始录音"
+                enabled: recordingBridge.hasRecording
+                         && !recordingBridge.isRecording
+                         && !recordingBridge.isProcessing
+                         && recordingBridge.activeRecordingVariant !== "original"
+                onTriggered: root.useOriginalRecording()
+            }
+        }
+        Platform.Menu {
             title: "帮助"
             Platform.MenuItem {
                 text: "快捷键…"
@@ -712,8 +917,22 @@ ApplicationWindow {
                                     && waveformBridge.selectionEnd > waveformBridge.selectionStart
                 selectionStart: waveformBridge.selectionStart
                 selectionEnd: waveformBridge.selectionEnd
+                canStartTraining: trainingController.mediaAvailable
+                                  && (trainingController.selectionAvailable
+                                      || trainingController.hasActiveSession)
+                isTraining: trainingController.isTraining
+                hasStartedTraining: trainingController.hasActiveSession
+                isPlaybackPlaying: trainingController.isRecordingSession
+                                   ? recordingPlaybackBridge.isPlaying
+                                   : mediaBridge.isPlaying
+                completedLoops: trainingController.completedLoops
+                totalLoops: trainingController.totalLoops
+                trainingStatus: trainingController.statusMessage
                 onVideoOpenRequested: function(path) {
                     videoPlaybackPane.loadVideoAndRelatedAssets(path)
+                }
+                onStartTrainingRequested: function(repeatCount, intervalSeconds) {
+                    root.startOrContinueTraining(repeatCount, intervalSeconds)
                 }
                 panelBg: theme.panelBg
                 elevatedBg: theme.elevatedBg
@@ -768,6 +987,7 @@ ApplicationWindow {
                         noteBridge.loadForVideoPath(path, durationSecs)
                         noteBridge.syncPlaybackPosition(mediaBridge.currentPosition)
                         recordingBridge.loadForVideoPath(path, durationSecs)
+                        segmentBridge.refreshRecordingRanges()
                         recordingBridge.syncTargetRange(
                                     waveformBridge.selectionStart,
                                     waveformBridge.selectionEnd,
@@ -810,13 +1030,17 @@ ApplicationWindow {
                         if (!segmentBridge.ensureSelectionSegment(
                                     startSecs,
                                     endSecs,
-                                    controlPanel.repeatCount,
-                                    controlPanel.intervalSeconds))
+                                    librarySidebar.repeatCount,
+                                    librarySidebar.intervalSeconds))
                             return
                         speechRecognitionBridge.recognizeSelection(
                                     mediaBridge.loadedPath,
                                     startSecs,
                                     endSecs)
+                    }
+                    onSelectionAdjustmentStarted: root.beginSelectionAdjustment()
+                    onSelectionChangeCommitted: function(startSecs, endSecs) {
+                        root.commitSelectionAdjustment(startSecs, endSecs)
                     }
                     onPlaybackPositionRequested: function(positionSecs) {
                         root.seekPlaybackManually(positionSecs)
@@ -863,35 +1087,6 @@ ApplicationWindow {
                     accentBg: theme.accentBg
                 }
 
-                ControlPanel {
-                    id: controlPanel
-                    visible: !root.videoFullScreen
-                    SplitView.minimumHeight: 110
-                    SplitView.preferredHeight: 130
-                    canStartTraining: trainingController.mediaAvailable
-                                      && (trainingController.selectionAvailable
-                                          || trainingController.hasActiveSession)
-                    isTraining: trainingController.isTraining
-                    hasStartedTraining: trainingController.hasActiveSession
-                    isPlaybackPlaying: trainingController.isRecordingSession
-                                       ? recordingPlaybackBridge.isPlaying
-                                       : mediaBridge.isPlaying
-                    completedLoops: trainingController.completedLoops
-                    totalLoops: trainingController.totalLoops
-                    selectionStart: waveformBridge.selectionStart
-                    selectionEnd: waveformBridge.selectionEnd
-                    trainingStatus: trainingController.statusMessage
-                    onStartTrainingRequested: function(repeatCount, intervalSeconds) {
-                        root.startOrContinueTraining(repeatCount, intervalSeconds)
-                    }
-                    panelBg: theme.panelBg
-                    elevatedBg: theme.elevatedBg
-                    borderColor: theme.border
-                    textPrimary: theme.textPrimary
-                    textSecondary: theme.textSecondary
-                    accent: theme.accent
-                    accentBg: theme.accentBg
-                }
             }
 
             SplitView {
@@ -948,6 +1143,12 @@ ApplicationWindow {
                     segmentBridge: segmentBridge
                     onSegmentActivated: function(index) {
                         root.requestActivateLearningSegment(index)
+                    }
+                    onSegmentTrainingRequested: function(index) {
+                        root.startSegmentTraining(index)
+                    }
+                    onRecordingTrainingRequested: function(index) {
+                        root.startSegmentRecordingTraining(index)
                     }
                     onSegmentDeleteRequested: function(index) {
                         root.deleteLearningSegment(index)
@@ -1022,7 +1223,11 @@ ApplicationWindow {
         closePolicy: Popup.CloseOnEscape
         width: 430
 
-        onRejected: root.pendingSegmentIndex = -1
+        onRejected: {
+            root.pendingSegmentIndex = -1
+            root.pendingSegmentTraining = false
+            root.pendingSegmentRecordingTraining = false
+        }
 
         contentItem: Label {
             padding: 18

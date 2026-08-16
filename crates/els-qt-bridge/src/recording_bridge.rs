@@ -25,13 +25,16 @@ pub mod qobject {
         #[qproperty(bool, has_target, cxx_name = "hasTarget")]
         #[qproperty(bool, is_recording, cxx_name = "isRecording")]
         #[qproperty(bool, is_processing, cxx_name = "isProcessing")]
+        #[qproperty(bool, is_loading_waveform, cxx_name = "isLoadingWaveform")]
         #[qproperty(bool, has_recording, cxx_name = "hasRecording")]
         #[qproperty(f64, target_start, cxx_name = "targetStart")]
         #[qproperty(f64, target_end, cxx_name = "targetEnd")]
+        #[qproperty(f64, video_duration, cxx_name = "videoDuration")]
         #[qproperty(f64, recording_duration, cxx_name = "recordingDuration")]
         #[qproperty(f64, recording_elapsed, cxx_name = "recordingElapsed")]
         #[qproperty(f64, alignment_offset, cxx_name = "alignmentOffset")]
         #[qproperty(QString, recording_file_path, cxx_name = "recordingFilePath")]
+        #[qproperty(QString, active_recording_variant, cxx_name = "activeRecordingVariant")]
         #[qproperty(QVector_f32, recording_peak_values, cxx_name = "recordingPeakValues")]
         #[qproperty(i32, recording_revision, cxx_name = "recordingRevision")]
         #[qproperty(QString, status_message, cxx_name = "statusMessage")]
@@ -77,6 +80,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "deleteRecording"]
         fn delete_recording(self: Pin<&mut RecordingBridge>) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "processNoiseReduction"]
+        fn process_noise_reduction(self: Pin<&mut RecordingBridge>, profile: &QString) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "useOriginalRecording"]
+        fn use_original_recording(self: Pin<&mut RecordingBridge>) -> bool;
     }
 }
 
@@ -88,13 +99,16 @@ pub struct RecordingBridgeRust {
     has_target: bool,
     is_recording: bool,
     is_processing: bool,
+    is_loading_waveform: bool,
     has_recording: bool,
     target_start: f64,
     target_end: f64,
+    video_duration: f64,
     recording_duration: f64,
     recording_elapsed: f64,
     alignment_offset: f64,
     recording_file_path: QString,
+    active_recording_variant: QString,
     recording_peak_values: QVector<f32>,
     recording_revision: i32,
     status_message: QString,
@@ -113,13 +127,16 @@ impl Default for RecordingBridgeRust {
             has_target: false,
             is_recording: false,
             is_processing: false,
+            is_loading_waveform: false,
             has_recording: false,
             target_start: 0.0,
             target_end: 0.0,
+            video_duration: 0.0,
             recording_duration: 0.0,
             recording_elapsed: 0.0,
             alignment_offset: 0.0,
             recording_file_path: QString::from(""),
+            active_recording_variant: QString::from("original"),
             recording_peak_values: QVector::from(Vec::new()),
             recording_revision: 1,
             status_message: QString::from("请先选择录音范围"),
@@ -156,6 +173,7 @@ impl qobject::RecordingBridge {
             };
         self.as_mut().rust_mut().current_video_id = Some(video_id);
         self.as_mut().set_has_video(true);
+        self.as_mut().set_video_duration(duration_secs);
         self.as_mut().clear_target();
         self.as_mut()
             .set_status_message(QString::from("请选择 A～B 录音范围"));
@@ -175,6 +193,7 @@ impl qobject::RecordingBridge {
         }
         self.as_mut().rust_mut().task_receiver = None;
         self.as_mut().set_is_processing(false);
+        self.as_mut().set_is_loading_waveform(false);
         let video_id = match self.rust().current_video_id {
             Some(video_id) => video_id,
             None => return false,
@@ -218,6 +237,16 @@ impl qobject::RecordingBridge {
         if !self.rust().has_video || !self.rust().has_target {
             return false;
         }
+        if self.rust().is_processing && !self.rust().is_loading_waveform {
+            return false;
+        }
+        if self.rust().is_loading_waveform {
+            self.as_mut().rust_mut().task_receiver = None;
+            let next_task_id = self.rust().active_task_id.saturating_add(1);
+            self.as_mut().rust_mut().active_task_id = next_task_id;
+            self.as_mut().set_is_processing(false);
+            self.as_mut().set_is_loading_waveform(false);
+        }
         if let Err(error) = self.as_mut().rust_mut().session.start() {
             return self.as_mut().report_error("开始录音失败", error);
         }
@@ -255,6 +284,7 @@ impl qobject::RecordingBridge {
             Err(error) => return self.as_mut().fail_session("保存录音失败", error),
         };
         self.as_mut().set_is_processing(true);
+        self.as_mut().set_is_loading_waveform(false);
         self.as_mut()
             .set_status_message(QString::from("正在生成录音波形"));
         self.as_mut().start_captured_waveform_task(captured);
@@ -286,6 +316,33 @@ impl qobject::RecordingBridge {
             return self.rust().is_recording || self.rust().is_processing;
         };
         match event {
+            WaveformTaskEvent::Denoised { task_id, recording_id, profile, output_path, waveform }
+                if task_id == self.rust().active_task_id => {
+                self.as_mut().rust_mut().task_receiver = None;
+                let Some(mut recording) = self.rust().session.recording().cloned() else {
+                    let _ = std::fs::remove_file(output_path);
+                    self.as_mut().set_is_processing(false);
+                    return false;
+                };
+                if recording.id != recording_id {
+                    let _ = std::fs::remove_file(output_path);
+                    return false;
+                }
+                if let Err(error) = self.as_mut().rust_mut().manager.save_variant(
+                    &mut recording, &profile, output_path.to_string_lossy().into_owned()) {
+                    let _ = std::fs::remove_file(output_path);
+                    self.as_mut().set_is_processing(false);
+                    return self.as_mut().report_error("保存降噪版本失败", error);
+                }
+                self.as_mut().rust_mut().session.load_recording(Some(recording.clone()));
+                self.as_mut().apply_recording_metadata(&recording);
+                self.as_mut().set_recording_peak_values(flatten_bins(&waveform.bins));
+                self.as_mut().bump_recording_revision();
+                self.as_mut().set_is_processing(false);
+                self.as_mut().set_is_loading_waveform(false);
+                self.as_mut().set_status_message(QString::from(&format!("{}降噪已完成", profile)));
+                true
+            }
             WaveformTaskEvent::Ready {
                 task_id,
                 recording,
@@ -333,6 +390,7 @@ impl qobject::RecordingBridge {
                     .set_recording_peak_values(flatten_bins(&waveform.bins));
                 self.as_mut().bump_recording_revision();
                 self.as_mut().set_is_processing(false);
+                self.as_mut().set_is_loading_waveform(false);
                 self.as_mut()
                     .set_status_message(QString::from("录音已保存"));
                 true
@@ -344,6 +402,7 @@ impl qobject::RecordingBridge {
             } if task_id == self.rust().active_task_id => {
                 self.as_mut().rust_mut().task_receiver = None;
                 self.as_mut().set_is_processing(false);
+                self.as_mut().set_is_loading_waveform(false);
                 if let Some(path) = captured_path {
                     let _ = std::fs::remove_file(path);
                     self.as_mut().rust_mut().session.fail(message.clone());
@@ -361,11 +420,12 @@ impl qobject::RecordingBridge {
             Some(recording) => recording,
             None => return false,
         };
+        let video_duration = self.rust().video_duration;
         if let Err(error) = self
             .as_mut()
             .rust_mut()
             .manager
-            .set_alignment(&mut recording, offset_secs)
+            .set_alignment(&mut recording, video_duration, offset_secs)
         {
             return self.as_mut().report_error("保存录音对齐失败", error);
         }
@@ -393,11 +453,80 @@ impl qobject::RecordingBridge {
         if let Err(error) = self.as_mut().rust_mut().manager.delete(&recording) {
             return self.as_mut().report_error("删除录音失败", error);
         }
-        let _ = std::fs::remove_file(&recording.file_path);
+        let mut leftovers = Vec::new();
+        for path in recording.all_file_paths() {
+            if let Err(error) = std::fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    leftovers.push(path.to_string());
+                }
+            }
+        }
         self.as_mut().rust_mut().session.load_recording(None);
         self.as_mut().clear_recording();
-        self.as_mut()
-            .set_status_message(QString::from("录音已删除"));
+        let message = if leftovers.is_empty() {
+            "录音及降噪版本已删除".to_string()
+        } else {
+            format!("录音记录已删除，但有 {} 个文件未能删除", leftovers.len())
+        };
+        self.as_mut().set_status_message(QString::from(&message));
+        true
+    }
+
+    fn process_noise_reduction(mut self: Pin<&mut Self>, profile: &QString) -> bool {
+        if self.rust().is_recording || self.rust().is_processing {
+            return false;
+        }
+        let Some(profile) = els_audio_processing::NoiseReductionProfile::parse(&profile.to_string()) else {
+            self.as_mut().set_status_message(QString::from("降噪强度无效"));
+            return false;
+        };
+        let Some(recording) = self.rust().session.recording().cloned() else {
+            self.as_mut().set_status_message(QString::from("尚未录制音频"));
+            return false;
+        };
+        let task_id = self.rust().active_task_id.saturating_add(1);
+        self.as_mut().rust_mut().active_task_id = task_id;
+        self.as_mut().set_is_processing(true);
+        self.as_mut().set_is_loading_waveform(false);
+        self.as_mut().set_status_message(QString::from(&format!("正在生成{}降噪版本", profile.id())));
+        let (sender, receiver) = mpsc::channel();
+        let source = recording.file_path.clone();
+        let sample_rate = recording.sample_rate;
+        let recording_id = recording.id;
+        let output_path = els_audio_processing::denoised_path(Path::new(&source), profile);
+        thread::spawn(move || {
+            let result = els_audio_processing::process_recording(Path::new(&source), profile, sample_rate)
+                .and_then(|output_path| {
+                    let waveform = els_waveform_core::FfmpegWaveformEngine.generate(&els_waveform_core::AudioSource {
+                        video_path: Some(output_path.to_string_lossy().into_owned()),
+                        duration_secs: recording.duration_secs,
+                        quality: els_waveform_core::WaveformQuality::Preview,
+                    })?;
+                    Ok((output_path, waveform))
+                });
+            match result {
+                Ok((output_path, waveform)) => { let _ = sender.send(WaveformTaskEvent::Denoised { task_id, recording_id, profile: profile.id().to_string(), output_path, waveform }); }
+                Err(error) => {
+                    let _ = std::fs::remove_file(&output_path);
+                    let _ = sender.send(WaveformTaskEvent::Failed { task_id, message: format!("录音降噪失败：{error}"), captured_path: None });
+                }
+            }
+        });
+        self.as_mut().rust_mut().task_receiver = Some(receiver);
+        true
+    }
+
+    fn use_original_recording(mut self: Pin<&mut Self>) -> bool {
+        if self.rust().is_recording || self.rust().is_processing { return false; }
+        let Some(mut recording) = self.rust().session.recording().cloned() else { return false; };
+        if recording.active_variant == "original" { return true; }
+        if let Err(error) = self.as_mut().rust_mut().manager.set_active_variant(&mut recording, "original") {
+            return self.as_mut().report_error("切换原始录音失败", error);
+        }
+        self.as_mut().rust_mut().session.load_recording(Some(recording.clone()));
+        self.as_mut().apply_recording_metadata(&recording);
+        self.as_mut().start_waveform_task(recording, None);
+        self.as_mut().set_status_message(QString::from("正在加载原始录音"));
         true
     }
 }
@@ -447,9 +576,10 @@ impl qobject::RecordingBridge {
     ) {
         let task_id = self.rust().active_task_id.saturating_add(1);
         self.as_mut().rust_mut().active_task_id = task_id;
+        self.as_mut().set_is_loading_waveform(true);
         self.as_mut().set_is_processing(true);
         let (sender, receiver) = mpsc::channel();
-        let path = recording.file_path.clone();
+        let path = recording.active_file_path().to_string();
         let duration = recording.duration_secs;
         thread::spawn(move || {
             let engine = els_waveform_core::FfmpegWaveformEngine;
@@ -487,7 +617,9 @@ impl qobject::RecordingBridge {
         self.as_mut()
             .set_alignment_offset(recording.alignment_offset);
         self.as_mut()
-            .set_recording_file_path(QString::from(&recording.file_path));
+            .set_recording_file_path(QString::from(recording.active_file_path()));
+        self.as_mut()
+            .set_active_recording_variant(QString::from(&recording.active_variant));
         self.as_mut().set_has_recording(true);
     }
 
@@ -497,6 +629,7 @@ impl qobject::RecordingBridge {
         self.as_mut().set_recording_elapsed(0.0);
         self.as_mut().set_alignment_offset(0.0);
         self.as_mut().set_recording_file_path(QString::from(""));
+        self.as_mut().set_active_recording_variant(QString::from("original"));
         self.as_mut()
             .set_recording_peak_values(QVector::from(Vec::new()));
         self.as_mut().bump_recording_revision();
@@ -509,6 +642,7 @@ impl qobject::RecordingBridge {
         self.as_mut().set_target_start(0.0);
         self.as_mut().set_target_end(0.0);
         self.as_mut().set_is_processing(false);
+        self.as_mut().set_is_loading_waveform(false);
         self.as_mut().clear_recording();
     }
 
@@ -522,6 +656,7 @@ impl qobject::RecordingBridge {
         self.as_mut().rust_mut().session.fail(message.clone());
         self.as_mut().set_is_recording(false);
         self.as_mut().set_is_processing(false);
+        self.as_mut().set_is_loading_waveform(false);
         self.as_mut().set_status_message(QString::from(&message));
         false
     }
@@ -535,6 +670,13 @@ impl qobject::RecordingBridge {
 }
 
 enum WaveformTaskEvent {
+    Denoised {
+        task_id: u64,
+        recording_id: i64,
+        profile: String,
+        output_path: std::path::PathBuf,
+        waveform: els_waveform_core::WaveformData,
+    },
     Ready {
         task_id: u64,
         recording: Option<els_recording_core::Recording>,

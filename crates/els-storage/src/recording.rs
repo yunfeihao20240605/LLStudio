@@ -106,7 +106,9 @@ impl RecordingRepository for SqliteRecordingRepository {
         self.connection()?
             .query_row(
                 "SELECT id, video_id, range_start, range_end, file_path,
-                        duration, sample_rate, alignment_offset, created_at
+                        duration, sample_rate, alignment_offset, active_variant,
+                        denoised_light_path, denoised_standard_path,
+                        denoised_strong_path, created_at
                  FROM recording
                  WHERE video_id = ?1
                    AND ABS(range_start - ?2) <= 0.001
@@ -126,12 +128,37 @@ impl RecordingRepository for SqliteRecordingRepository {
                         duration_secs: row.get(5)?,
                         sample_rate: row.get(6)?,
                         alignment_offset: row.get(7)?,
-                        created_at: row.get(8)?,
+                        active_variant: row.get(8)?,
+                        denoised_light_path: row.get(9)?,
+                        denoised_standard_path: row.get(10)?,
+                        denoised_strong_path: row.get(11)?,
+                        created_at: row.get(12)?,
                     })
                 },
             )
             .optional()
             .map_err(sqlite_error)
+    }
+
+    fn list_ranges(&self, video_id: i64) -> els_types::AppResult<Vec<TimeRange>> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT DISTINCT range_start, range_end
+                 FROM recording
+                 WHERE video_id = ?1
+                 ORDER BY range_start ASC, range_end ASC",
+            )
+            .map_err(sqlite_error)?;
+        let rows = statement
+            .query_map(params![video_id], |row| {
+                Ok(TimeRange {
+                    start: row.get(0)?,
+                    end: row.get(1)?,
+                })
+            })
+            .map_err(sqlite_error)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(sqlite_error)
     }
 
     fn update_alignment(
@@ -146,6 +173,57 @@ impl RecordingRepository for SqliteRecordingRepository {
                 "UPDATE recording SET alignment_offset = ?1
              WHERE id = ?2 AND video_id = ?3",
                 params![offset_secs, recording_id, video_id],
+            )
+            .map_err(sqlite_error)?;
+        if changed == 0 {
+            return Err(els_types::AppError::NotFound);
+        }
+        Ok(())
+    }
+
+    fn save_variant(
+        &mut self,
+        recording_id: i64,
+        video_id: i64,
+        variant: &str,
+        file_path: &str,
+    ) -> els_types::AppResult<()> {
+        let column = match variant {
+            "light" => "denoised_light_path",
+            "standard" => "denoised_standard_path",
+            "strong" => "denoised_strong_path",
+            _ => {
+                return Err(els_types::AppError::InvalidArgument(
+                    "降噪版本无效".to_string(),
+                ))
+            }
+        };
+        let sql = format!(
+            "UPDATE recording SET {column} = ?1, active_variant = ?2
+             WHERE id = ?3 AND video_id = ?4"
+        );
+        let changed = self
+            .connection()?
+            .execute(&sql, params![file_path, variant, recording_id, video_id])
+            .map_err(sqlite_error)?;
+        if changed == 0 {
+            return Err(els_types::AppError::NotFound);
+        }
+        Ok(())
+    }
+
+    fn set_active_variant(
+        &mut self,
+        recording_id: i64,
+        video_id: i64,
+        variant: &str,
+    ) -> els_types::AppResult<()> {
+        let changed = self
+            .connection()?
+            .execute(
+                "UPDATE recording SET active_variant = ?1
+                 WHERE id = ?2 AND video_id = ?3",
+                params![variant, recording_id, video_id],
             )
             .map_err(sqlite_error)?;
         if changed == 0 {

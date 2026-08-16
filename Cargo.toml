@@ -8,6 +8,7 @@ members = [
     "crates/els-note-core",
     "crates/els-recording-core",
     "crates/els-audio-capture",
+    "crates/els-audio-processing",
     "crates/els-learning-core",
     "crates/els-ai-core",
     "crates/els-speech-core",

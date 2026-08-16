@@ -48,6 +48,12 @@ impl RecordingPlaybackTimeline {
             None
         }
     }
+
+    pub fn has_overlap(self) -> bool {
+        let recording_start = self.alignment_offset;
+        let recording_end = recording_start + self.recording_duration;
+        recording_end > 0.0 && recording_start < self.selection_duration
+    }
 }
 
 #[cfg(test)]
@@ -70,5 +76,15 @@ mod tests {
         assert_eq!(timeline.recording_position_at(1.9), Some(2.9));
         assert_eq!(timeline.recording_position_at(2.0), None);
         assert_eq!(timeline.clamp_position(10.0), 4.0);
+    }
+
+    #[test]
+    fn detects_recordings_outside_the_selection() {
+        let before = RecordingPlaybackTimeline::new(4.0, 3.0, -4.0).expect("timeline");
+        let after = RecordingPlaybackTimeline::new(4.0, 3.0, 4.0).expect("timeline");
+        let overlap = RecordingPlaybackTimeline::new(4.0, 3.0, 3.5).expect("timeline");
+        assert!(!before.has_overlap());
+        assert!(!after.has_overlap());
+        assert!(overlap.has_overlap());
     }
 }

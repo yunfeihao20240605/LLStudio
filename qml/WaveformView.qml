@@ -50,6 +50,8 @@ Rectangle {
     signal recordingPlaybackSeekRequested(real positionSecs)
     signal originalTrainingToggleRequested()
     signal speechRecognitionRequested(real startSecs, real endSecs)
+    signal selectionAdjustmentStarted()
+    signal selectionChangeCommitted(real startSecs, real endSecs)
 
     function formatSeconds(totalSeconds) {
         var safe = Math.max(0, Math.floor(totalSeconds || 0))
@@ -78,6 +80,22 @@ Rectangle {
                 && waveformBridge.hasSelectionStart
                 && waveformBridge.hasSelectionEnd
                 && waveformBridge.selectionEnd > waveformBridge.selectionStart
+    }
+
+    function normalizedRenderGain(renderedPeaks, zoom, displayGain) {
+        if (!renderedPeaks || renderedPeaks.length <= 0)
+            return 1
+        var sampledPeaks = renderedPeaks.slice()
+        sampledPeaks.sort(function(left, right) { return left - right })
+        var percentileIndex = Math.floor((sampledPeaks.length - 1) * 0.95)
+        var referencePeak = sampledPeaks[Math.max(0, percentileIndex)]
+        if (!isFinite(referencePeak) || referencePeak <= 0.0001)
+            return 1
+        var zoomProgress = Math.max(0, Math.min(1,
+                                 Math.log(Math.max(1, zoom)) / Math.log(200)))
+        var targetHeight = (0.63 + 0.15 * zoomProgress) * displayGain / 1.8
+        targetHeight = Math.max(0.35, Math.min(0.9, targetHeight))
+        return Math.max(0.25, Math.min(16, targetHeight / referencePeak))
     }
 
     function selectionLengthLabel() {
@@ -275,10 +293,15 @@ Rectangle {
         }
     }
 
-    Menu {
+    ThemedMenu {
         id: waveformContextMenu
+        panelColor: root.panelBg
+        borderColor: root.borderColor
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
             visible: root.contextMenuOnOriginalTrack
             text: !root.originalTrainingActive ? "播放原音"
                   : (root.originalPlaybackPlaying
@@ -287,11 +310,15 @@ Rectangle {
             onTriggered: root.originalTrainingToggleRequested()
         }
 
-        MenuSeparator {
+        ThemedMenuSeparator {
+            separatorColor: root.borderColor
             visible: root.contextMenuOnOriginalTrack
         }
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
             text: waveformBridge
                   && waveformBridge.hasSelectionStart
                   && waveformBridge.hasSelectionEnd
@@ -311,9 +338,12 @@ Rectangle {
             }
         }
 
-        MenuSeparator {}
+        ThemedMenuSeparator { separatorColor: root.borderColor }
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
             text: root.speechRecognizing ? "正在识别当前片段…" : "识别当前片段字幕"
             enabled: !root.speechRecognizing
                      && waveformBridge
@@ -325,17 +355,23 @@ Rectangle {
                              waveformBridge.selectionEnd)
         }
 
-        MenuSeparator {}
+        ThemedMenuSeparator { separatorColor: root.borderColor }
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
             text: "从当前片段结尾开始下一片段"
             enabled: root.canBeginNextSegment
             onTriggered: root.nextSegmentRequested()
         }
 
-        MenuSeparator {}
+        ThemedMenuSeparator { separatorColor: root.borderColor }
 
-        MenuItem {
+        ThemedMenuItem {
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
             text: "清除选区"
             enabled: waveformBridge
                      && (waveformBridge.hasSelectionStart || waveformBridge.hasSelectionEnd)
@@ -574,18 +610,45 @@ Rectangle {
                             var loadedCount = useDetail ? totalBins : waveformBridge.loadedBinCount
                             var selectionVisible = root.selectionIsValid()
                             var unloadedColor = Qt.rgba(0.81, 0.83, 0.86, 0.35)
-                            var maximumVisiblePeak = 0
-                            for (var peakIndex = firstBin; peakIndex < lastBin; ++peakIndex) {
-                                maximumVisiblePeak = Math.max(
-                                            maximumVisiblePeak,
-                                            Math.abs(peaks[peakIndex * 2]),
-                                            Math.abs(peaks[peakIndex * 2 + 1]))
+                            var renderedPeaks = []
+                            if (binsPerPixel >= 1) {
+                                for (var referencePixel = 0;
+                                     referencePixel < Math.ceil(width);
+                                     ++referencePixel) {
+                                    var referenceStart = Math.max(firstBin,
+                                        Math.floor(firstBin + referencePixel * binsPerPixel))
+                                    var referenceEnd = Math.min(lastBin,
+                                        Math.max(referenceStart + 1,
+                                            Math.floor(firstBin + (referencePixel + 1)
+                                                       * binsPerPixel)))
+                                    if (referenceStart >= lastBin)
+                                        break
+                                    var negativeEnergy = 0
+                                    var positiveEnergy = 0
+                                    var referenceCount = 0
+                                    for (var referenceBin = referenceStart;
+                                         referenceBin < referenceEnd; ++referenceBin) {
+                                        negativeEnergy += peaks[referenceBin * 2]
+                                                * peaks[referenceBin * 2]
+                                        positiveEnergy += peaks[referenceBin * 2 + 1]
+                                                * peaks[referenceBin * 2 + 1]
+                                        ++referenceCount
+                                    }
+                                    renderedPeaks.push(Math.max(
+                                        Math.sqrt(negativeEnergy / Math.max(1, referenceCount)),
+                                        Math.sqrt(positiveEnergy / Math.max(1, referenceCount))))
+                                }
+                            } else {
+                                for (var referenceIndex = firstBin;
+                                     referenceIndex < lastBin; ++referenceIndex) {
+                                    renderedPeaks.push(Math.max(
+                                        Math.abs(peaks[referenceIndex * 2]),
+                                        Math.abs(peaks[referenceIndex * 2 + 1])))
+                                }
                             }
-                            var basePeak = maximumVisiblePeak * root.waveformDisplayGain
-                            var autoGain = basePeak > 0.0001
-                                    ? Math.max(1, Math.min(16, 0.78 / basePeak))
-                                    : 1
-                            var renderGain = root.waveformDisplayGain * autoGain
+                            var renderGain = root.normalizedRenderGain(
+                                        renderedPeaks, root.zoomFactor,
+                                        root.waveformDisplayGain)
 
                             function barColor(binStart, binEnd) {
                                 if (binEnd > loadedCount)
@@ -615,27 +678,68 @@ Rectangle {
                                                                            Math.floor(firstBin + (pixel + 1) * binsPerPixel)))
                                     if (binStart >= lastBin)
                                         break
-                                    var minAmplitude = 0
-                                    var maxAmplitude = 0
+                                    var negativeEnergy = 0
+                                    var positiveEnergy = 0
+                                    var aggregateCount = 0
                                     for (var bin = binStart; bin < binEnd; ++bin) {
-                                        minAmplitude = Math.min(minAmplitude, peaks[bin * 2])
-                                        maxAmplitude = Math.max(maxAmplitude, peaks[bin * 2 + 1])
+                                        negativeEnergy += peaks[bin * 2] * peaks[bin * 2]
+                                        positiveEnergy += peaks[bin * 2 + 1] * peaks[bin * 2 + 1]
+                                        ++aggregateCount
                                     }
+                                    var rmsMinimum = -Math.sqrt(
+                                                negativeEnergy / Math.max(1, aggregateCount))
+                                    var rmsMaximum = Math.sqrt(
+                                                positiveEnergy / Math.max(1, aggregateCount))
                                     var pixelX = ((dataStart + binStart * secondsPerBin - rangeStart)
                                                   / visibleDuration) * width
-                                    drawBar(pixelX, Math.max(1, (binEnd - binStart) * secondsPerBin
-                                                               / visibleDuration * width), minAmplitude, maxAmplitude,
-                                            barColor(binStart, binEnd))
+                                    var aggregateWidth = Math.max(1,
+                                            (binEnd - binStart) * secondsPerBin
+                                            / visibleDuration * width)
+                                    var aggregateColor = barColor(binStart, binEnd)
+                                    drawBar(pixelX, aggregateWidth, rmsMinimum,
+                                            rmsMaximum, aggregateColor)
                                 }
                             } else {
                                 var pixelsPerBin = secondsPerBin / visibleDuration * width
-                                var barWidth = Math.max(1, Math.min(6, pixelsPerBin * 0.72))
-                                for (var index = firstBin; index < lastBin; ++index) {
-                                    var localX = ((dataStart + index * secondsPerBin - rangeStart)
-                                                  / visibleDuration) * width
-                                            + (pixelsPerBin - barWidth) * 0.5
-                                    drawBar(localX, barWidth, peaks[index * 2], peaks[index * 2 + 1],
-                                            barColor(index, index + 1))
+                                if (root.zoomFactor >= 200) {
+                                    for (var index = firstBin; index < lastBin; ++index) {
+                                        var nextIndex = Math.min(lastBin - 1, index + 1)
+                                        var leftX = ((dataStart + index * secondsPerBin - rangeStart)
+                                                     / visibleDuration) * width
+                                        var rightX = ((dataStart + (index + 1) * secondsPerBin
+                                                       - rangeStart) / visibleDuration) * width
+                                        var currentMin = Math.max(-1, Math.min(0,
+                                            peaks[index * 2] * renderGain))
+                                        var currentMax = Math.max(0, Math.min(1,
+                                            peaks[index * 2 + 1] * renderGain))
+                                        var nextMin = Math.max(-1, Math.min(0,
+                                            peaks[nextIndex * 2] * renderGain))
+                                        var nextMax = Math.max(0, Math.min(1,
+                                            peaks[nextIndex * 2 + 1] * renderGain))
+                                        context.beginPath()
+                                        context.moveTo(leftX,
+                                            centerY - currentMax * amplitudeHeight)
+                                        context.lineTo(rightX,
+                                            centerY - nextMax * amplitudeHeight)
+                                        context.lineTo(rightX,
+                                            centerY - nextMin * amplitudeHeight)
+                                        context.lineTo(leftX,
+                                            centerY - currentMin * amplitudeHeight)
+                                        context.closePath()
+                                        context.fillStyle = barColor(index, index + 1)
+                                        context.fill()
+                                    }
+                                } else {
+                                    var barWidth = Math.max(1,
+                                            Math.min(6, pixelsPerBin * 0.72))
+                                    for (var index = firstBin; index < lastBin; ++index) {
+                                        var localX = ((dataStart + index * secondsPerBin - rangeStart)
+                                                      / visibleDuration) * width
+                                                + (pixelsPerBin - barWidth) * 0.5
+                                        drawBar(localX, barWidth, peaks[index * 2],
+                                                peaks[index * 2 + 1],
+                                                barColor(index, index + 1))
+                                    }
                                 }
                             }
 
@@ -689,6 +793,8 @@ Rectangle {
                         trainingPlaybackPlaying: root.recordingPlaybackPlaying
                         trainingPlaybackPosition: root.recordingPlaybackPosition
                         borderColor: root.borderColor
+                        menuBackgroundColor: root.panelBg
+                        menuHoverColor: root.accentBg
                         textColor: root.textPrimary
                         highlightColor: root.accent
                         onSeekRequested: function(positionSecs) {
@@ -704,10 +810,6 @@ Rectangle {
                         }
                         onTrainingPlaybackToggleRequested:
                             root.recordingTrainingToggleRequested()
-                        onAlignmentCommitRequested: function(offsetSecs) {
-                            if (root.recordingBridge)
-                                root.recordingBridge.saveAlignmentOffset(offsetSecs)
-                        }
                         onResetAlignmentRequested: {
                             if (root.recordingBridge)
                                 root.recordingBridge.resetAlignment()
@@ -763,12 +865,15 @@ Rectangle {
 
                             onPressed: function(mouse) {
                                 root.followPlayback = false
+                                root.selectionAdjustmentStarted()
                                 updateMarker(mouse)
                             }
                             onPositionChanged: function(mouse) {
                                 if (pressed)
                                     updateMarker(mouse)
                             }
+                            onReleased: root.selectionChangeCommitted(
+                                            root.selectionStart(), root.selectionEnd())
                         }
                     }
 
@@ -820,12 +925,15 @@ Rectangle {
 
                             onPressed: function(mouse) {
                                 root.followPlayback = false
+                                root.selectionAdjustmentStarted()
                                 updateMarker(mouse)
                             }
                             onPositionChanged: function(mouse) {
                                 if (pressed)
                                     updateMarker(mouse)
                             }
+                            onReleased: root.selectionChangeCommitted(
+                                            root.selectionStart(), root.selectionEnd())
                         }
                     }
 
@@ -938,11 +1046,14 @@ Rectangle {
                     Layout.preferredWidth: 124
                     enabled: root.recordingBridge
                              && root.recordingBridge.hasTarget
-                             && !root.recordingBridge.isProcessing
+                             && (!root.recordingBridge.isProcessing
+                                 || root.recordingBridge.isLoadingWaveform)
                     text: root.recordingBridge && root.recordingBridge.isRecording
                           ? "■  停止 " + root.formatRecordingTime(
                                 root.recordingBridge.recordingElapsed)
-                          : (root.recordingBridge && root.recordingBridge.isProcessing
+                          : (root.recordingBridge
+                             && root.recordingBridge.isProcessing
+                             && !root.recordingBridge.isLoadingWaveform
                              ? "处理中" : "●  录音")
                     onClicked: {
                         if (root.recordingBridge.isRecording)
@@ -968,8 +1079,12 @@ Rectangle {
                     accentColor: root.accent
                     accentBackgroundColor: root.accentBg
                     onClicked: {
-                        if (waveformBridge)
+                        if (waveformBridge) {
+                            root.selectionAdjustmentStarted()
                             waveformBridge.markSelectionStart(waveformBridge.currentPosition)
+                            root.selectionChangeCommitted(root.selectionStart(),
+                                                          root.selectionEnd())
+                        }
                     }
                 }
 
@@ -986,8 +1101,12 @@ Rectangle {
                     accentColor: root.accent
                     accentBackgroundColor: root.accentBg
                     onClicked: {
-                        if (waveformBridge)
+                        if (waveformBridge) {
+                            root.selectionAdjustmentStarted()
                             waveformBridge.markSelectionEnd(waveformBridge.currentPosition)
+                            root.selectionChangeCommitted(root.selectionStart(),
+                                                          root.selectionEnd())
+                        }
                     }
                 }
             }

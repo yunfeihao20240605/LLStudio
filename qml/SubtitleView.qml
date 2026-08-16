@@ -19,6 +19,8 @@ Rectangle {
     property int activeTab: 0
     property var subtitleEntries: []
     property string savedEditorText: ""
+    property bool selectionAdjustmentActive: false
+    property string selectionAdjustmentDraft: ""
     readonly property bool hasUnsavedSubtitleChanges: selectionIsValid()
                                                                && subtitleEditor.text
                                                                   !== savedEditorText
@@ -95,6 +97,8 @@ Rectangle {
     function syncSelectionEditor() {
         if (!subtitleBridge)
             return
+        if (selectionAdjustmentActive)
+            return
         if (!selectionIsValid()) {
             subtitleBridge.syncSelectionRange(0, 0)
             return
@@ -102,6 +106,20 @@ Rectangle {
         subtitleBridge.syncSelectionRange(waveformBridge.selectionStart,
                                           waveformBridge.selectionEnd)
         syncAiContextFromEditingCue()
+    }
+
+    function beginSelectionAdjustment() {
+        selectionAdjustmentActive = true
+        selectionAdjustmentDraft = subtitleEditor.text
+    }
+
+    function endSelectionAdjustment() {
+        var draft = selectionAdjustmentDraft
+        selectionAdjustmentActive = false
+        selectionAdjustmentDraft = ""
+        syncSelectionEditor()
+        if (subtitleEditor.text !== draft)
+            subtitleEditor.text = draft
     }
 
     function syncAiContextFromEditingCue() {

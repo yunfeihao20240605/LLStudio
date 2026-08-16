@@ -21,6 +21,8 @@ Rectangle {
 
     signal segmentActivated(int index)
     signal segmentDeleteRequested(int index)
+    signal segmentTrainingRequested(int index)
+    signal recordingTrainingRequested(int index)
     signal labelPlaybackRequested(int index)
     signal noteCreationRequested(real startSecs, real endSecs)
 
@@ -309,6 +311,8 @@ Rectangle {
                     return root.segmentBridge ? root.segmentBridge.segmentLabelAt(index) : ""
                 }
                 readonly property bool selected: root.isSegmentSelected(index)
+                readonly property bool hasRecording: root.segmentBridge
+                                                     && root.segmentBridge.segmentHasRecordingAt(index)
 
                 width: ListView.view.width
                 height: 68
@@ -360,9 +364,36 @@ Rectangle {
                     }
 
                     Text {
+                        visible: segmentDelegate.hasRecording
+                        text: "🎙"
+                        color: accent
+                        font.pixelSize: 15
+
+                        MouseArea {
+                            id: recordingTrainingMouseArea
+                            anchors.fill: parent
+                            anchors.margins: -8
+                            hoverEnabled: true
+                            onClicked: root.recordingTrainingRequested(index)
+                        }
+                        ToolTip.visible: recordingTrainingMouseArea.containsMouse
+                        ToolTip.text: "使用录音训练"
+                    }
+
+                    Text {
                         text: "▶"
                         color: accent
                         font.pixelSize: 16
+
+                        MouseArea {
+                            id: originalTrainingMouseArea
+                            anchors.fill: parent
+                            anchors.margins: -8
+                            hoverEnabled: true
+                            onClicked: root.segmentTrainingRequested(index)
+                        }
+                        ToolTip.visible: originalTrainingMouseArea.containsMouse
+                        ToolTip.text: "使用原音训练"
                     }
 
                     Text {

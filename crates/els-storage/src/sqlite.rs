@@ -306,6 +306,10 @@ pub(crate) fn ensure_schema(connection: &Connection) -> els_types::AppResult<()>
         "ALTER TABLE segment ADD COLUMN interval_seconds INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE segment ADD COLUMN completed_loops INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE segment ADD COLUMN label TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE recording ADD COLUMN active_variant TEXT NOT NULL DEFAULT 'original'",
+        "ALTER TABLE recording ADD COLUMN denoised_light_path TEXT",
+        "ALTER TABLE recording ADD COLUMN denoised_standard_path TEXT",
+        "ALTER TABLE recording ADD COLUMN denoised_strong_path TEXT",
     ] {
         if let Err(err) = connection.execute(migration, []) {
             if !err.to_string().contains("duplicate column name") {
