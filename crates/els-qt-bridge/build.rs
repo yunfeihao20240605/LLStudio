@@ -31,16 +31,20 @@ fn main() {
             CppFile::from("src/mpv_video_item.cpp"),
         ]);
 
-    if let Some(prefix) = mpv_prefix {
-        let include_dir = prefix.join("include");
-        if include_dir.exists() {
-            unsafe {
-                builder = builder.cc_builder(|cc| {
+    unsafe {
+        builder = builder.cc_builder(|cc| {
+            cc.flag_if_supported("-Wno-deprecated-declarations");
+            cc.flag_if_supported("-Wno-missing-field-initializers");
+            if let Some(ref prefix) = mpv_prefix {
+                let include_dir = prefix.join("include");
+                if include_dir.exists() {
                     cc.include(&include_dir);
-                });
+                }
             }
-        }
+        });
+    }
 
+    if let Some(prefix) = mpv_prefix {
         let lib_dir = prefix.join("lib");
         if lib_dir.exists() {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
