@@ -75,6 +75,7 @@ jobs:
           echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS_x86_64_apple_darwin=1" >> $GITHUB_ENV
+          echo "MACOSX_DEPLOYMENT_TARGET=12.0" >> $GITHUB_ENV
 
       - name: Setup FFmpeg & mpv (Windows)
         if: matrix.os == 'windows-latest'
@@ -134,6 +135,7 @@ jobs:
         env:
           PKG_CONFIG_ALLOW_CROSS: "1"
           PKG_CONFIG_ALLOW_CROSS_x86_64_apple_darwin: "1"
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
         run: |
           cargo build --release -p els-app --target ${{ matrix.target_triple }}
           
