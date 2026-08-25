@@ -6,6 +6,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <gl/GL.h>
 #endif
 
 #include "mpv_video_item.h"
