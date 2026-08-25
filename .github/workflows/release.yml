@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.os }} - ${{ matrix.target_name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -23,10 +23,14 @@ jobs:
           - os: ubuntu-22.04
             target_name: linux
             artifact_name: english-learning-studio_amd64.deb
-          - os: macos-14
+          - os: macos-latest
             target_name: macos-arm64
-          - os: macos-13
+            target_triple: aarch64-apple-darwin
+            artifact_name: EnglishLearningStudio-macOS-arm64.dmg
+          - os: macos-latest
             target_name: macos-x86_64
+            target_triple: x86_64-apple-darwin
+            artifact_name: EnglishLearningStudio-macOS-x86_64.dmg
 
     steps:
       - name: Checkout repository
@@ -36,6 +40,10 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Rust target
+        if: startsWith(matrix.os, 'macos')
+        run: rustup target add ${{ matrix.target_triple }}
 
       - name: Cache Cargo build
         uses: Swatinem/rust-cache@v2
@@ -65,12 +73,14 @@ jobs:
           brew install ffmpeg mpv pkg-config
           echo "$(brew --prefix ffmpeg)/lib/pkgconfig" >> $GITHUB_PATH
           echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
       - name: Setup FFmpeg & mpv (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          FFMPEG_URL=$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest | grep "browser_download_url" | grep "win64-gpl-shared-6.1" | cut -d '"' -f 4 | head -n 1)
+          FFMPEG_URL=$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases | grep "browser_download_url" | grep "win64-gpl-shared-6.1.zip" | cut -d '"' -f 4 | head -n 1)
+          FFMPEG_URL=${FFMPEG_URL:-https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-05-31-12-53/ffmpeg-n6.1-latest-win64-gpl-shared-6.1.zip}
           echo "Downloading FFmpeg 6.1 from: $FFMPEG_URL"
           curl -L -o ffmpeg.zip "$FFMPEG_URL"
           unzip ffmpeg.zip
@@ -116,68 +126,12 @@ jobs:
           cargo deb -p els-app --no-build -o ${{ matrix.artifact_name }}
 
       # ----------------------------------------------------
-      # macOS 原生二进制编译
+      # macOS 打包流程 (.dmg)
       # ----------------------------------------------------
-      - name: Build macOS binary (${{ matrix.target_name }})
+      - name: Build macOS App and DMG
         if: startsWith(matrix.os, 'macos')
-        run: cargo build --release -p els-app
-
-      - name: Upload macOS ARM64 binary
-        if: matrix.os == 'macos-14'
-        uses: actions/upload-artifact@v4
-        with:
-          name: els-app-arm64
-          path: target/release/els-app
-
-      - name: Upload macOS x86_64 binary
-        if: matrix.os == 'macos-13'
-        uses: actions/upload-artifact@v4
-        with:
-          name: els-app-x86_64
-          path: target/release/els-app
-
-      # ----------------------------------------------------
-      # 上传非 macOS 的打包产物至 Release
-      # ----------------------------------------------------
-      - name: Release Non-macOS Artifacts
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') && !startsWith(matrix.os, 'macos')
-        with:
-          files: ${{ matrix.artifact_name }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  package-macos:
-    name: Package Universal DMG (macOS)
-    runs-on: macos-14
-    needs: build
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install Qt 6
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: '6.6.3'
-
-      - name: Download ARM64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: els-app-arm64
-          path: bin-arm64
-
-      - name: Download x86_64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: els-app-x86_64
-          path: bin-x86_64
-
-      - name: Create Universal DMG
         run: |
-          chmod +x bin-arm64/els-app bin-x86_64/els-app
+          cargo build --release -p els-app --target ${{ matrix.target_triple }}
           
           mkdir -p "dist/English Learning Studio.app/Contents/MacOS"
           mkdir -p "dist/English Learning Studio.app/Contents/Resources"
@@ -186,8 +140,8 @@ jobs:
             cp crates/els-app/Info.plist "dist/English Learning Studio.app/Contents/Info.plist"
           fi
           
-          lipo -create bin-arm64/els-app bin-x86_64/els-app -output "dist/English Learning Studio.app/Contents/MacOS/els-app"
-          
+          cp target/${{ matrix.target_triple }}/release/els-app "dist/English Learning Studio.app/Contents/MacOS/els-app"
+            
           macdeployqt "dist/English Learning Studio.app" -qmldir=qml -always-overwrite
           
           brew install create-dmg
@@ -197,14 +151,17 @@ jobs:
             --window-size 800 400 \
             --icon-size 100 \
             --app-drop-link 600 185 \
-            "EnglishLearningStudio-macOS-Universal.dmg" \
+            "${{ matrix.artifact_name }}" \
             "dist/English Learning Studio.app"
 
-      - name: Release macOS Universal DMG
+      # ----------------------------------------------------
+      # 上传打包产物至 Release
+      # ----------------------------------------------------
+      - name: Release Artifacts
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: EnglishLearningStudio-macOS-Universal.dmg
+          files: ${{ matrix.artifact_name }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
