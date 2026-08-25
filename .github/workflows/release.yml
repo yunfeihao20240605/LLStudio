@@ -66,6 +66,7 @@ jobs:
           brew install ffmpeg mpv pkg-config
           echo "$(brew --prefix ffmpeg)/lib/pkgconfig" >> $GITHUB_PATH
           echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
       - name: Setup FFmpeg & mpv (Windows)
         if: matrix.os == 'windows-latest'
@@ -98,14 +99,14 @@ jobs:
       # ----------------------------------------------------
       - name: Build and Package Installer (Windows)
         if: matrix.os == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
           cargo build --release -p els-app
-          mkdir -p dist
-          cp target/release/els-app.exe dist/
-          cp C:/ffmpeg/bin/*.dll dist/
-          cp C:/mpv/*.dll dist/ || true
-          cp C:/mpv/lib*.dll dist/ || true
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item target/release/els-app.exe dist/
+          Copy-Item C:/ffmpeg/bin/*.dll dist/
+          Copy-Item C:/mpv/*.dll dist/ -ErrorAction SilentlyContinue
+          Copy-Item C:/mpv/lib*.dll dist/ -ErrorAction SilentlyContinue
           windeployqt --qmldir qml dist/els-app.exe
           makensis installer.nsi
 
