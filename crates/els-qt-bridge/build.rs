@@ -45,6 +45,9 @@ fn main() {
     }
 
     if let Some(prefix) = mpv_prefix {
+        // Always add prefix root (Windows shinchiro dev pkg places mpv.lib here)
+        println!("cargo:rustc-link-search=native={}", prefix.display());
+        // Also add prefix/lib if it exists (Linux/macOS Homebrew layout)
         let lib_dir = prefix.join("lib");
         if lib_dir.exists() {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
