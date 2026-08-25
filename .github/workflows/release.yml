@@ -45,17 +45,23 @@ jobs:
           version: '6.6.3'
           arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2019_64' || '' }}
 
+      - name: Setup MSVC (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+
       # ----------------------------------------------------
       # Windows 打包流程 (.exe 安装包 via NSIS)
       # ----------------------------------------------------
       - name: Build and Package Installer (Windows)
         if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
           cargo build --release -p els-app
-          mkdir dist
+          mkdir -p dist
           cp target/release/els-app.exe dist/
           windeployqt --qmldir qml dist/els-app.exe
           makensis installer.nsi
+
 
       # ----------------------------------------------------
       # macOS 打包流程 (Universal DMG - Intel & ARM)
