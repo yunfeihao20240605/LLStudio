@@ -1,5 +1,5 @@
 !define PRODUCT_NAME "English Learning Studio"
-!define PRODUCT_VERSION "0.1.0"
+!define PRODUCT_VERSION "0.1.2"
 !define PRODUCT_PUBLISHER "yunfeihao20240605"
 !define PRODUCT_WEB_SITE "https://github.com/yunfeihao20240605/LLStudio"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\els-app.exe"
@@ -7,6 +7,7 @@
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
 
 SetCompressor lzma
+RequestExecutionLevel admin
 
 !include "MUI2.nsh"
 
@@ -24,21 +25,22 @@ SetCompressor lzma
 !insertmacro MUI_PAGE_FINISH
 
 ; Uninstaller pages
-!insertmacro MUI_PAGE_UNINSTCONFIRM
-!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
 
 ; Language files
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "EnglishLearningStudio-Setup.exe"
+OutFile "LLStudio-Setup.exe"
 InstallDir "$PROGRAMFILES64\English Learning Studio"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
 ShowUnInstDetails show
 
 Section "MainSection" SEC01
+  SetShellVarContext all
   SetOutPath "$INSTDIR"
   SetOverwrite ifnewer
   File /r "dist\*.*"
@@ -69,6 +71,7 @@ Function un.onInit
 FunctionEnd
 
 Section Uninstall
+  SetShellVarContext all
   Delete "$DESKTOP\English Learning Studio.lnk"
   Delete "$SMPROGRAMS\English Learning Studio\English Learning Studio.lnk"
   RMDir "$SMPROGRAMS\English Learning Studio"
