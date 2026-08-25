@@ -67,11 +67,14 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          curl -L -o ffmpeg.zip https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.0-latest-win64-gpl-shared-7.0.zip
+          FFMPEG_URL=$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest | grep "browser_download_url" | grep "win64-gpl-shared" | cut -d '"' -f 4 | head -n 1)
+          echo "Downloading FFmpeg from: $FFMPEG_URL"
+          curl -L -o ffmpeg.zip "$FFMPEG_URL"
           unzip ffmpeg.zip
-          mv ffmpeg-n7.0-latest-win64-gpl-shared-7.0 C:/ffmpeg
+          mv ffmpeg-n* C:/ffmpeg || mv ffmpeg-master* C:/ffmpeg || mv ffmpeg-7* C:/ffmpeg
           echo "FFMPEG_DIR=C:/ffmpeg" >> $GITHUB_ENV
           echo "PATH=C:/ffmpeg/bin;$PATH" >> $GITHUB_ENV
+
 
       - name: Setup MSVC (Windows)
         if: matrix.os == 'windows-latest'
