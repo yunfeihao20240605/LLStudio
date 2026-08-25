@@ -35,8 +35,6 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.os == 'macos-14' && 'aarch64-apple-darwin x86_64-apple-darwin' || '' }}
 
       - name: Cache Cargo build
         uses: Swatinem/rust-cache@v2
@@ -111,13 +109,12 @@ jobs:
           makensis installer.nsi
 
       # ----------------------------------------------------
-      # macOS 打包流程 (Universal DMG - Intel & ARM)
+      # macOS 打包流程 (.dmg 安装镜像)
       # ----------------------------------------------------
-      - name: Build Universal Binary and DMG (macOS)
+      - name: Build macOS App and DMG
         if: matrix.os == 'macos-14'
         run: |
-          cargo build --release -p els-app --target aarch64-apple-darwin
-          cargo build --release -p els-app --target x86_64-apple-darwin
+          cargo build --release -p els-app
           
           mkdir -p "dist/English Learning Studio.app/Contents/MacOS"
           mkdir -p "dist/English Learning Studio.app/Contents/Resources"
@@ -126,10 +123,7 @@ jobs:
             cp crates/els-app/Info.plist "dist/English Learning Studio.app/Contents/Info.plist"
           fi
           
-          lipo -create \
-            target/aarch64-apple-darwin/release/els-app \
-            target/x86_64-apple-darwin/release/els-app \
-            -output "dist/English Learning Studio.app/Contents/MacOS/els-app"
+          cp target/release/els-app "dist/English Learning Studio.app/Contents/MacOS/els-app"
             
           macdeployqt "dist/English Learning Studio.app" -qmldir=qml -always-overwrite
           
