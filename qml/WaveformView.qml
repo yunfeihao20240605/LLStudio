@@ -26,7 +26,9 @@ Rectangle {
     readonly property bool compactMode: width < 720
     property real zoomFactor: 1.0
     property real minimumZoom: 1.0
-    property real maximumZoom: 1000.0
+    property real maximumZoom: 2000.0
+    readonly property var zoomLevels: [1, 2, 5, 10, 20, 50, 100, 200,
+                                       500, 1000, 2000]
     property real waveformDisplayGain: 1.8
     property bool followPlayback: true
     readonly property bool comparisonVisible: recordingBridge
@@ -106,6 +108,40 @@ Rectangle {
 
     function clamp(value, minimum, maximum) {
         return Math.max(minimum, Math.min(maximum, value))
+    }
+
+    function zoomToSliderPosition(zoom) {
+        var ratio = maximumZoom / minimumZoom
+        if (ratio <= 1)
+            return 0
+        return Math.log(clamp(zoom, minimumZoom, maximumZoom) / minimumZoom)
+                / Math.log(ratio)
+    }
+
+    function sliderPositionToZoom(position) {
+        var ratio = maximumZoom / minimumZoom
+        return minimumZoom * Math.pow(ratio, clamp(position, 0, 1))
+    }
+
+    function stepZoom(direction) {
+        if (direction > 0) {
+            for (var nextIndex = 0; nextIndex < zoomLevels.length; ++nextIndex) {
+                if (zoomLevels[nextIndex] > zoomFactor + 0.001) {
+                    setZoom(zoomLevels[nextIndex])
+                    return
+                }
+            }
+            setZoom(maximumZoom)
+            return
+        }
+        for (var previousIndex = zoomLevels.length - 1;
+             previousIndex >= 0; --previousIndex) {
+            if (zoomLevels[previousIndex] < zoomFactor - 0.001) {
+                setZoom(zoomLevels[previousIndex])
+                return
+            }
+        }
+        setZoom(minimumZoom)
     }
 
     function timeToContentX(seconds) {
@@ -402,7 +438,7 @@ Rectangle {
                 Layout.preferredWidth: 44
                 text: "−"
                 enabled: root.zoomFactor > root.minimumZoom
-                onClicked: root.setZoom(root.zoomFactor - 0.5)
+                onClicked: root.stepZoom(-1)
                 panelColor: root.panelBg
                 borderColor: root.borderColor
                 textColor: root.textPrimary
@@ -415,11 +451,11 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 72
                 Layout.maximumWidth: 150
-                from: root.minimumZoom
-                to: root.maximumZoom
-                stepSize: 0.5
-                value: root.zoomFactor
-                onMoved: root.setZoom(value)
+                from: 0
+                to: 1
+                stepSize: 0
+                value: root.zoomToSliderPosition(root.zoomFactor)
+                onMoved: root.setZoom(root.sliderPositionToZoom(value))
                 panelColor: root.panelBg
                 trackColor: root.borderColor
                 accentColor: root.accent
@@ -429,7 +465,7 @@ Rectangle {
                 Layout.preferredWidth: 44
                 text: "+"
                 enabled: root.zoomFactor < root.maximumZoom
-                onClicked: root.setZoom(root.zoomFactor + 0.5)
+                onClicked: root.stepZoom(1)
                 panelColor: root.panelBg
                 borderColor: root.borderColor
                 textColor: root.textPrimary
@@ -442,7 +478,7 @@ Rectangle {
                 text: root.zoomFactor.toFixed(1) + "x"
                 color: textSecondary
                 font.pixelSize: 13
-                Layout.preferredWidth: 48
+                Layout.preferredWidth: 58
             }
 
             ThemedToolButton {
