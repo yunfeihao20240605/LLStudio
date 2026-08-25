@@ -47,23 +47,27 @@ jobs:
           version: '6.6.3'
           arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2019_64' || '' }}
 
+      - name: Export Qt6 CMAKE_PREFIX_PATH
+        run: |
+          echo "CMAKE_PREFIX_PATH=$Qt6_DIR" >> $GITHUB_ENV
+
       # ----------------------------------------------------
-      # 安装 FFmpeg 依赖 (Windows / macOS / Linux)
+      # 安装 FFmpeg & mpv 依赖 (Windows / macOS / Linux)
       # ----------------------------------------------------
       - name: Install FFmpeg & System Audio Libs (Linux)
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libasound2-dev ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev libavfilter-dev libgl1-mesa-dev libxcb-glx0-dev build-essential
+          sudo apt-get install -y pkg-config libasound2-dev libmpv-dev ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev libavfilter-dev libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxcb-glx0-dev build-essential
 
-
-      - name: Install FFmpeg (macOS)
+      - name: Install FFmpeg & mpv (macOS)
         if: matrix.os == 'macos-14'
         run: |
-          brew install ffmpeg pkg-config
+          brew install ffmpeg mpv pkg-config
+          echo "$(brew --prefix ffmpeg)/lib/pkgconfig" >> $GITHUB_PATH
           echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
-      - name: Setup FFmpeg (Windows)
+      - name: Setup FFmpeg & mpv (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
@@ -73,7 +77,16 @@ jobs:
           unzip ffmpeg.zip
           mv ffmpeg-n* C:/ffmpeg || mv ffmpeg-master* C:/ffmpeg || mv ffmpeg-7* C:/ffmpeg
           echo "FFMPEG_DIR=C:/ffmpeg" >> $GITHUB_ENV
-          echo "PATH=C:/ffmpeg/bin;$PATH" >> $GITHUB_ENV
+          echo "C:/ffmpeg/bin" >> $GITHUB_PATH
+
+          MPV_URL=$(curl -s https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest | grep "browser_download_url" | grep "mpv-dev-x86_64" | cut -d '"' -f 4 | head -n 1)
+          echo "Downloading mpv dev from: $MPV_URL"
+          curl -L -o mpv-dev.7z "$MPV_URL"
+          7z x mpv-dev.7z -oC:/mpv
+          echo "MPV_PREFIX=C:/mpv" >> $GITHUB_ENV
+          echo "C:/mpv" >> $GITHUB_PATH
+
+
 
 
       - name: Setup MSVC (Windows)
@@ -91,6 +104,8 @@ jobs:
           mkdir -p dist
           cp target/release/els-app.exe dist/
           cp C:/ffmpeg/bin/*.dll dist/
+          cp C:/mpv/*.dll dist/ || true
+          cp C:/mpv/lib*.dll dist/ || true
           windeployqt --qmldir qml dist/els-app.exe
           makensis installer.nsi
 
