@@ -6,7 +6,7 @@ fn main() {
     let mpv_prefix = detect_mpv_prefix();
     let mut builder = CxxQtBuilder::new_qml_module(QmlModule::new("com.yfhao.els.bridge"))
         .qt_module("Network")
-        .qt_module("OpenGL")
+        .qt_module("Gui")
         .qt_module("Quick")
         .files([
             "src/app_bootstrap.rs",

@@ -6,7 +6,6 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use els_media_core::MediaController;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 const DEMO_VIDEO_PATH: &str = "TED_AI_未来.mp4";
 

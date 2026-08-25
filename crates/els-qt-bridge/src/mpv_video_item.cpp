@@ -112,6 +112,7 @@ private:
     mpv_opengl_init_params glInitParams {
       get_proc_address,
       nullptr,
+      nullptr,
     };
 
     mpv_render_param params[] = {
