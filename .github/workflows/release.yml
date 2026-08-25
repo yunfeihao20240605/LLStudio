@@ -20,12 +20,13 @@ jobs:
           - os: windows-latest
             target_name: windows
             artifact_name: EnglishLearningStudio-Setup.exe
-          - os: macos-14
-            target_name: macos
-            artifact_name: EnglishLearningStudio-macOS-Universal.dmg
           - os: ubuntu-22.04
             target_name: linux
             artifact_name: english-learning-studio_amd64.deb
+          - os: macos-14
+            target_name: macos-arm64
+          - os: macos-13
+            target_name: macos-x86_64
 
     steps:
       - name: Checkout repository
@@ -59,12 +60,11 @@ jobs:
           sudo apt-get install -y pkg-config libasound2-dev libmpv-dev ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev libavfilter-dev libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxcb-glx0-dev build-essential
 
       - name: Install FFmpeg & mpv (macOS)
-        if: matrix.os == 'macos-14'
+        if: startsWith(matrix.os, 'macos')
         run: |
           brew install ffmpeg mpv pkg-config
           echo "$(brew --prefix ffmpeg)/lib/pkgconfig" >> $GITHUB_PATH
           echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
       - name: Setup FFmpeg & mpv (Windows)
         if: matrix.os == 'windows-latest'
@@ -84,9 +84,6 @@ jobs:
           7z x mpv-dev.7z -oC:/mpv
           echo "MPV_PREFIX=C:/mpv" >> $GITHUB_ENV
           echo "C:/mpv" >> $GITHUB_PATH
-
-
-
 
       - name: Setup MSVC (Windows)
         if: matrix.os == 'windows-latest'
@@ -109,35 +106,6 @@ jobs:
           makensis installer.nsi
 
       # ----------------------------------------------------
-      # macOS 打包流程 (.dmg 安装镜像)
-      # ----------------------------------------------------
-      - name: Build macOS App and DMG
-        if: matrix.os == 'macos-14'
-        run: |
-          cargo build --release -p els-app
-          
-          mkdir -p "dist/English Learning Studio.app/Contents/MacOS"
-          mkdir -p "dist/English Learning Studio.app/Contents/Resources"
-          
-          if [ -f "crates/els-app/Info.plist" ]; then
-            cp crates/els-app/Info.plist "dist/English Learning Studio.app/Contents/Info.plist"
-          fi
-          
-          cp target/release/els-app "dist/English Learning Studio.app/Contents/MacOS/els-app"
-            
-          macdeployqt "dist/English Learning Studio.app" -qmldir=qml -always-overwrite
-          
-          brew install create-dmg
-          create-dmg \
-            --volname "English Learning Studio" \
-            --window-pos 200 120 \
-            --window-size 800 400 \
-            --icon-size 100 \
-            --app-drop-link 600 185 \
-            "${{ matrix.artifact_name }}" \
-            "dist/English Learning Studio.app"
-
-      # ----------------------------------------------------
       # Linux 打包流程 (.deb)
       # ----------------------------------------------------
       - name: Build DEB package (Linux)
@@ -148,13 +116,95 @@ jobs:
           cargo deb -p els-app --no-build -o ${{ matrix.artifact_name }}
 
       # ----------------------------------------------------
-      # 上传打包产物至 GitHub Release
+      # macOS 原生二进制编译
       # ----------------------------------------------------
-      - name: Release Artifacts
+      - name: Build macOS binary (${{ matrix.target_name }})
+        if: startsWith(matrix.os, 'macos')
+        run: cargo build --release -p els-app
+
+      - name: Upload macOS ARM64 binary
+        if: matrix.os == 'macos-14'
+        uses: actions/upload-artifact@v4
+        with:
+          name: els-app-arm64
+          path: target/release/els-app
+
+      - name: Upload macOS x86_64 binary
+        if: matrix.os == 'macos-13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: els-app-x86_64
+          path: target/release/els-app
+
+      # ----------------------------------------------------
+      # 上传非 macOS 的打包产物至 Release
+      # ----------------------------------------------------
+      - name: Release Non-macOS Artifacts
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') && !startsWith(matrix.os, 'macos')
+        with:
+          files: ${{ matrix.artifact_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  package-macos:
+    name: Package Universal DMG (macOS)
+    runs-on: macos-14
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.6.3'
+
+      - name: Download ARM64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: els-app-arm64
+          path: bin-arm64
+
+      - name: Download x86_64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: els-app-x86_64
+          path: bin-x86_64
+
+      - name: Create Universal DMG
+        run: |
+          chmod +x bin-arm64/els-app bin-x86_64/els-app
+          
+          mkdir -p "dist/English Learning Studio.app/Contents/MacOS"
+          mkdir -p "dist/English Learning Studio.app/Contents/Resources"
+          
+          if [ -f "crates/els-app/Info.plist" ]; then
+            cp crates/els-app/Info.plist "dist/English Learning Studio.app/Contents/Info.plist"
+          fi
+          
+          lipo -create bin-arm64/els-app bin-x86_64/els-app -output "dist/English Learning Studio.app/Contents/MacOS/els-app"
+          
+          macdeployqt "dist/English Learning Studio.app" -qmldir=qml -always-overwrite
+          
+          brew install create-dmg
+          create-dmg \
+            --volname "English Learning Studio" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --app-drop-link 600 185 \
+            "EnglishLearningStudio-macOS-Universal.dmg" \
+            "dist/English Learning Studio.app"
+
+      - name: Release macOS Universal DMG
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ${{ matrix.artifact_name }}
+          files: EnglishLearningStudio-macOS-Universal.dmg
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
