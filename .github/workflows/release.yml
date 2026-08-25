@@ -109,6 +109,12 @@ jobs:
         shell: pwsh
         run: |
           choco install nsis --no-progress -y
+          $nsisDir = "${env:ProgramFiles(x86)}\NSIS"
+          $makensis = Join-Path $nsisDir "makensis.exe"
+          if (-not (Test-Path $makensis)) {
+            throw "NSIS was not installed: $makensis"
+          }
+          $env:Path = "$nsisDir;$env:Path"
           cargo build --release -p els-app
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item target/release/els-app.exe dist/
@@ -116,7 +122,7 @@ jobs:
           Copy-Item C:/mpv/*.dll dist/ -ErrorAction SilentlyContinue
           Copy-Item C:/mpv/lib*.dll dist/ -ErrorAction SilentlyContinue
           windeployqt --qmldir qml dist/els-app.exe
-          makensis installer.nsi
+          & $makensis installer.nsi
 
       # ----------------------------------------------------
       # Linux 打包流程 (.deb)
@@ -172,10 +178,11 @@ jobs:
         run: |
           TAG=${GITHUB_REF#refs/tags/}
           # Extract the section between ## [$TAG] and the next ## [, exclusive
-          awk "/^## \\[$TAG\\]/,/^## \\[/" CHANGELOG.md \
-            | head -n -1 \
-            | tail -n +2 \
-            > RELEASE_NOTES.md
+          awk -v tag="$TAG" '
+            index($0, "## [" tag "]") == 1 { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
           # Fallback: if empty, write a default message
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "Release $TAG" > RELEASE_NOTES.md
