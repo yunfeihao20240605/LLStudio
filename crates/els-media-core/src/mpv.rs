@@ -68,6 +68,7 @@ impl MpvHandle {
     fn set_mpv_numeric_locale() {
         std::env::set_var("LC_NUMERIC", "C");
         unsafe {
+            #[cfg(not(target_os = "windows"))]
             libc::setenv(c"LC_NUMERIC".as_ptr(), c"C".as_ptr(), 1);
             libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr());
         }
