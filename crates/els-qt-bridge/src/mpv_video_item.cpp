@@ -8,7 +8,6 @@
 #include <windows.h>
 #endif
 
-#include <QtGui/qopengl.h>
 #include "mpv_video_item.h"
 
 #include <QtCore/QByteArray>
@@ -16,7 +15,6 @@
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QOpenGLFunctions>
 #include <QtOpenGL/QOpenGLFramebufferObject>
-#include <QtQuick/QQuickOpenGLUtils>
 #include <QtQuick/QQuickWindow>
 #include <QtQml/qqml.h>
 
@@ -109,7 +107,6 @@ public:
     };
 
     mpv_render_context_render(m_renderContext, params);
-    QQuickOpenGLUtils::resetOpenGLState();
   }
 
 private:
