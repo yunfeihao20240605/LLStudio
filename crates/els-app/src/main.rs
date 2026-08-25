@@ -46,6 +46,7 @@ fn configure_process_environment() {
     std::env::set_var("LANG", "C.UTF-8");
     std::env::set_var("QT_QUICK_CONTROLS_STYLE", "Basic");
 
+    #[cfg(not(target_os = "windows"))]
     unsafe {
         libc::setenv(c"LC_ALL".as_ptr(), c"C.UTF-8".as_ptr(), 1);
         libc::setenv(c"LC_NUMERIC".as_ptr(), c"C".as_ptr(), 1);
