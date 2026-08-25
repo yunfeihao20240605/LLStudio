@@ -21,3 +21,16 @@ els-qt-bridge = { path = "../els-qt-bridge" }
 
 [build-dependencies]
 cxx-qt-build.workspace = true
+
+[package.metadata.deb]
+name = "english-learning-studio"
+maintainer = "yunfeihao20240605 <yfhao@example.com>"
+copyright = "2026, yunfeihao20240605"
+license-file = ["../../LICENSE", "4"]
+extended-description = "English Learning Studio - An advanced desktop application for audio listening and language training."
+section = "utility"
+priority = "optional"
+assets = [
+    ["target/release/els-app", "usr/bin/els-app", "755"],
+]
+

@@ -1,0 +1,114 @@
+name: Build and Release Multi-platform Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target_name: windows
+            artifact_name: EnglishLearningStudio-Setup.exe
+          - os: macos-14
+            target_name: macos
+            artifact_name: EnglishLearningStudio-macOS-Universal.dmg
+          - os: ubuntu-22.04
+            target_name: linux
+            artifact_name: english-learning-studio_amd64.deb
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-14' && 'aarch64-apple-darwin x86_64-apple-darwin' || '' }}
+
+      - name: Cache Cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.6.3'
+          arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2019_64' || '' }}
+
+      # ----------------------------------------------------
+      # Windows 打包流程 (.exe 安装包 via NSIS)
+      # ----------------------------------------------------
+      - name: Build and Package Installer (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cargo build --release -p els-app
+          mkdir dist
+          cp target/release/els-app.exe dist/
+          windeployqt --qmldir qml dist/els-app.exe
+          makensis installer.nsi
+
+      # ----------------------------------------------------
+      # macOS 打包流程 (Universal DMG - Intel & ARM)
+      # ----------------------------------------------------
+      - name: Build Universal Binary and DMG (macOS)
+        if: matrix.os == 'macos-14'
+        run: |
+          cargo build --release -p els-app --target aarch64-apple-darwin
+          cargo build --release -p els-app --target x86_64-apple-darwin
+          
+          mkdir -p "dist/English Learning Studio.app/Contents/MacOS"
+          mkdir -p "dist/English Learning Studio.app/Contents/Resources"
+          
+          if [ -f "crates/els-app/Info.plist" ]; then
+            cp crates/els-app/Info.plist "dist/English Learning Studio.app/Contents/Info.plist"
+          fi
+          
+          lipo -create \
+            target/aarch64-apple-darwin/release/els-app \
+            target/x86_64-apple-darwin/release/els-app \
+            -output "dist/English Learning Studio.app/Contents/MacOS/els-app"
+            
+          macdeployqt "dist/English Learning Studio.app" -qmldir=qml -always-overwrite
+          
+          brew install create-dmg
+          create-dmg \
+            --volname "English Learning Studio" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --app-drop-link 600 185 \
+            "${{ matrix.artifact_name }}" \
+            "dist/English Learning Studio.app"
+
+      # ----------------------------------------------------
+      # Linux 打包流程 (.deb)
+      # ----------------------------------------------------
+      - name: Build DEB package (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxcb-glx0-dev build-essential
+          cargo install cargo-deb
+          cargo build --release -p els-app
+          cargo deb -p els-app --no-build -o ${{ matrix.artifact_name }}
+
+      # ----------------------------------------------------
+      # 上传打包产物至 GitHub Release
+      # ----------------------------------------------------
+      - name: Release Artifacts
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ matrix.artifact_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
