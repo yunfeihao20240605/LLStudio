@@ -72,11 +72,11 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          FFMPEG_URL=$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest | grep "browser_download_url" | grep "win64-gpl-shared" | cut -d '"' -f 4 | head -n 1)
-          echo "Downloading FFmpeg from: $FFMPEG_URL"
+          FFMPEG_URL=$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest | grep "browser_download_url" | grep "win64-gpl-shared-6.1" | cut -d '"' -f 4 | head -n 1)
+          echo "Downloading FFmpeg 6.1 from: $FFMPEG_URL"
           curl -L -o ffmpeg.zip "$FFMPEG_URL"
           unzip ffmpeg.zip
-          mv ffmpeg-n* C:/ffmpeg || mv ffmpeg-master* C:/ffmpeg || mv ffmpeg-7* C:/ffmpeg
+          mv ffmpeg-n* C:/ffmpeg || mv ffmpeg-master* C:/ffmpeg || mv ffmpeg-6* C:/ffmpeg
           echo "FFMPEG_DIR=C:/ffmpeg" >> $GITHUB_ENV
           echo "C:/ffmpeg/bin" >> $GITHUB_PATH
 
