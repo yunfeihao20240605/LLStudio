@@ -24,8 +24,13 @@ jobs:
             target_name: linux
             artifact_name: english-learning-studio_amd64.deb
           - os: macos-latest
-            target_name: macos
-            artifact_name: EnglishLearningStudio-macOS.dmg
+            target_name: macos-arm64
+            target_triple: aarch64-apple-darwin
+            artifact_name: EnglishLearningStudio-macOS-arm64.dmg
+          - os: macos-latest
+            target_name: macos-x86_64
+            target_triple: x86_64-apple-darwin
+            artifact_name: EnglishLearningStudio-macOS-x86_64.dmg
 
     steps:
       - name: Checkout repository
@@ -35,6 +40,10 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Rust target
+        if: startsWith(matrix.os, 'macos')
+        run: rustup target add ${{ matrix.target_triple }}
 
       - name: Cache Cargo build
         uses: Swatinem/rust-cache@v2
@@ -64,6 +73,8 @@ jobs:
           brew install ffmpeg mpv pkg-config
           echo "$(brew --prefix ffmpeg)/lib/pkgconfig" >> $GITHUB_PATH
           echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS_x86_64_apple_darwin=1" >> $GITHUB_ENV
 
       - name: Setup FFmpeg & mpv (Windows)
         if: matrix.os == 'windows-latest'
@@ -120,8 +131,11 @@ jobs:
       # ----------------------------------------------------
       - name: Build macOS App and DMG
         if: startsWith(matrix.os, 'macos')
+        env:
+          PKG_CONFIG_ALLOW_CROSS: "1"
+          PKG_CONFIG_ALLOW_CROSS_x86_64_apple_darwin: "1"
         run: |
-          cargo build --release -p els-app
+          cargo build --release -p els-app --target ${{ matrix.target_triple }}
           
           mkdir -p "dist/English Learning Studio.app/Contents/MacOS"
           mkdir -p "dist/English Learning Studio.app/Contents/Resources"
@@ -130,7 +144,7 @@ jobs:
             cp crates/els-app/Info.plist "dist/English Learning Studio.app/Contents/Info.plist"
           fi
           
-          cp target/release/els-app "dist/English Learning Studio.app/Contents/MacOS/els-app"
+          cp target/${{ matrix.target_triple }}/release/els-app "dist/English Learning Studio.app/Contents/MacOS/els-app"
             
           macdeployqt "dist/English Learning Studio.app" -qmldir=qml -always-overwrite
           
