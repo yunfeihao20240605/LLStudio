@@ -45,6 +45,32 @@ jobs:
           version: '6.6.3'
           arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2019_64' || '' }}
 
+      # ----------------------------------------------------
+      # 安装 FFmpeg 依赖 (Windows / macOS / Linux)
+      # ----------------------------------------------------
+      - name: Install FFmpeg & System Audio Libs (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libasound2-dev ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev libavfilter-dev libgl1-mesa-dev libxcb-glx0-dev build-essential
+
+
+      - name: Install FFmpeg (macOS)
+        if: matrix.os == 'macos-14'
+        run: |
+          brew install ffmpeg pkg-config
+          echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+
+      - name: Setup FFmpeg (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          curl -L -o ffmpeg.zip https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.0-latest-win64-gpl-shared-7.0.zip
+          unzip ffmpeg.zip
+          mv ffmpeg-n7.0-latest-win64-gpl-shared-7.0 C:/ffmpeg
+          echo "FFMPEG_DIR=C:/ffmpeg" >> $GITHUB_ENV
+          echo "PATH=C:/ffmpeg/bin;$PATH" >> $GITHUB_ENV
+
       - name: Setup MSVC (Windows)
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
@@ -59,9 +85,9 @@ jobs:
           cargo build --release -p els-app
           mkdir -p dist
           cp target/release/els-app.exe dist/
+          cp C:/ffmpeg/bin/*.dll dist/
           windeployqt --qmldir qml dist/els-app.exe
           makensis installer.nsi
-
 
       # ----------------------------------------------------
       # macOS 打包流程 (Universal DMG - Intel & ARM)
@@ -102,8 +128,6 @@ jobs:
       - name: Build DEB package (Linux)
         if: matrix.os == 'ubuntu-22.04'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxcb-glx0-dev build-essential
           cargo install cargo-deb
           cargo build --release -p els-app
           cargo deb -p els-app --no-build -o ${{ matrix.artifact_name }}
