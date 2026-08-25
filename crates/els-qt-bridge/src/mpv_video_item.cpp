@@ -109,11 +109,9 @@ private:
     }
 
     auto *handle = reinterpret_cast<mpv_handle *>(static_cast<quintptr>(m_mpvHandle));
-    mpv_opengl_init_params glInitParams {
-      get_proc_address,
-      nullptr,
-      nullptr,
-    };
+    mpv_opengl_init_params glInitParams {};
+    glInitParams.get_proc_address = get_proc_address;
+    glInitParams.get_proc_address_ctx = nullptr;
 
     mpv_render_param params[] = {
       {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL)},
