@@ -33,6 +33,11 @@ Rectangle {
         return (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds)
     }
 
+    function formatDecimalSeconds(seconds) {
+        var formatted = Number(seconds || 0).toFixed(2).replace(/\.?0+$/, "")
+        return formatted.length > 0 ? formatted : "0"
+    }
+
     function scrollToBottom() {
         scrollToBottomPending = true
         scrollToBottomTimer.restart()
@@ -298,7 +303,7 @@ Rectangle {
                     const _revision = bridgeRevision
                     return root.segmentBridge ? root.segmentBridge.segmentRepeatCountAt(index) : 0
                 }
-                readonly property int intervalSeconds: {
+                readonly property real intervalSeconds: {
                     const _revision = bridgeRevision
                     return root.segmentBridge ? root.segmentBridge.segmentIntervalSecondsAt(index) : 0
                 }
@@ -357,7 +362,8 @@ Rectangle {
 
                         Text {
                             text: Math.max(0, Math.round(endSecs - startSecs)) + "秒  ×" + repeatCount
-                                  + "  间隔" + intervalSeconds + "秒  累计" + completedLoops + "次"
+                                  + "  间隔" + root.formatDecimalSeconds(intervalSeconds) + "秒  累计"
+                                  + completedLoops + "次"
                             color: textSecondary
                             font.pixelSize: 12
                         }

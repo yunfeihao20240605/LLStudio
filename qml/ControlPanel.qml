@@ -22,9 +22,10 @@ Rectangle {
     property real selectionEnd: 0
     property string trainingStatus: ""
     readonly property int repeatCount: repeatCountSpinBox.value
-    readonly property int intervalSeconds: intervalSecondsSpinBox.value
+    readonly property real intervalSeconds: intervalSecondsSpinBox.value
+                                                    / intervalSecondsSpinBox.scaleFactor
 
-    signal startTrainingRequested(int repeatCount, int intervalSeconds)
+    signal startTrainingRequested(int repeatCount, real intervalSeconds)
 
     function formatSeconds(totalSeconds) {
         var safe = Math.max(0, Math.floor(totalSeconds || 0))
@@ -39,7 +40,9 @@ Rectangle {
         repeatCountSpinBox.value = Math.max(repeatCountSpinBox.from,
                                             Math.min(repeatCountSpinBox.to, repeatCount))
         intervalSecondsSpinBox.value = Math.max(intervalSecondsSpinBox.from,
-                                                Math.min(intervalSecondsSpinBox.to, intervalSeconds))
+                                                Math.min(intervalSecondsSpinBox.to,
+                                                         Math.round(intervalSeconds
+                                                                   * intervalSecondsSpinBox.scaleFactor)))
     }
 
     radius: 16
@@ -107,8 +110,10 @@ Rectangle {
             ThemedSpinBox {
                 id: intervalSecondsSpinBox
                 from: 0
-                to: 30
-                value: 3
+                to: 3000
+                value: 300
+                stepSize: 10
+                decimals: 2
                 enabled: !isTraining
                 Layout.preferredWidth: 124
                 panelColor: root.panelBg
@@ -144,7 +149,7 @@ Rectangle {
                 enabled: root.canStartTraining
                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: root.startTrainingRequested(repeatCountSpinBox.value,
-                                                        intervalSecondsSpinBox.value)
+                                                        root.intervalSeconds)
             }
         }
 

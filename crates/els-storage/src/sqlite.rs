@@ -305,7 +305,7 @@ pub(crate) fn ensure_schema(connection: &Connection) -> els_types::AppResult<()>
         "ALTER TABLE video ADD COLUMN last_opened_at INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE video ADD COLUMN last_position REAL NOT NULL DEFAULT 0",
         "ALTER TABLE video ADD COLUMN list_id INTEGER",
-        "ALTER TABLE segment ADD COLUMN interval_seconds INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE segment ADD COLUMN interval_seconds REAL NOT NULL DEFAULT 0",
         "ALTER TABLE segment ADD COLUMN completed_loops INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE segment ADD COLUMN label TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE recording ADD COLUMN active_variant TEXT NOT NULL DEFAULT 'original'",
@@ -448,7 +448,7 @@ mod tests {
                     end: 20.0,
                 },
                 repeat_count: 3,
-                interval_seconds: 2,
+                interval_seconds: 0.5,
                 completed_loops: 0,
                 label: "场景 1".to_string(),
             })
@@ -494,7 +494,7 @@ mod tests {
                     end: 22.0,
                 },
                 repeat_count: 5,
-                interval_seconds: 1,
+                interval_seconds: 1.25,
                 completed_loops: 0,
                 label: "场景 1".to_string(),
             })
@@ -503,6 +503,7 @@ mod tests {
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].completed_loops, 2);
         assert_eq!(segments[0].repeat_count, 5);
+        assert_eq!(segments[0].interval_seconds, 1.25);
         assert_eq!(segments[0].range.start, 11.5);
         assert_eq!(segments[0].label, "场景 1");
         assert_eq!(segments[0].range.end, 22.0);
@@ -512,6 +513,7 @@ mod tests {
             SqliteSegmentRepository::open_path(&db_path).expect("reopen repository");
         let persisted = repository.find_by_video(video_id).expect("reload segments");
         assert_eq!(persisted[0].completed_loops, 2);
+        assert_eq!(persisted[0].interval_seconds, 1.25);
         assert_eq!(
             repository
                 .find_recent_labels(video_id, 10)
@@ -539,7 +541,7 @@ mod tests {
                     end: 4.0,
                 },
                 repeat_count: 2,
-                interval_seconds: 0,
+                interval_seconds: 0.0,
                 completed_loops: 0,
                 label: String::new(),
             })

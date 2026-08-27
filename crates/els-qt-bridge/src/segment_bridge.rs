@@ -30,7 +30,7 @@ pub mod qobject {
         #[qproperty(f64, active_start, cxx_name = "activeStart")]
         #[qproperty(f64, active_end, cxx_name = "activeEnd")]
         #[qproperty(i32, active_repeat_count, cxx_name = "activeRepeatCount")]
-        #[qproperty(i32, active_interval_seconds, cxx_name = "activeIntervalSeconds")]
+        #[qproperty(f64, active_interval_seconds, cxx_name = "activeIntervalSeconds")]
         #[qproperty(i32, active_completed_loops, cxx_name = "activeCompletedLoops")]
         #[qproperty(QString, current_video_path, cxx_name = "currentVideoPath")]
         #[qproperty(QString, current_video_title, cxx_name = "currentVideoTitle")]
@@ -55,7 +55,7 @@ pub mod qobject {
             start_secs: f64,
             end_secs: f64,
             repeat_count: i32,
-            interval_seconds: i32,
+            interval_seconds: f64,
         ) -> bool;
 
         #[qinvokable]
@@ -65,7 +65,7 @@ pub mod qobject {
             start_secs: f64,
             end_secs: f64,
             repeat_count: i32,
-            interval_seconds: i32,
+            interval_seconds: f64,
         ) -> bool;
 
         #[qinvokable]
@@ -130,7 +130,7 @@ pub mod qobject {
 
         #[qinvokable]
         #[cxx_name = "segmentIntervalSecondsAt"]
-        fn segment_interval_seconds_at(self: Pin<&mut SegmentBridge>, index: i32) -> i32;
+        fn segment_interval_seconds_at(self: Pin<&mut SegmentBridge>, index: i32) -> f64;
 
         #[qinvokable]
         #[cxx_name = "segmentCompletedLoopsAt"]
@@ -169,7 +169,7 @@ pub struct SegmentBridgeRust {
     active_start: f64,
     active_end: f64,
     active_repeat_count: i32,
-    active_interval_seconds: i32,
+    active_interval_seconds: f64,
     active_completed_loops: i32,
     current_video_path: QString,
     current_video_title: QString,
@@ -195,7 +195,7 @@ impl Default for SegmentBridgeRust {
             active_start: 0.0,
             active_end: 0.0,
             active_repeat_count: 0,
-            active_interval_seconds: 0,
+            active_interval_seconds: 0.0,
             active_completed_loops: 0,
             current_video_path: QString::from(""),
             current_video_title: QString::from(""),
@@ -276,11 +276,15 @@ impl qobject::SegmentBridge {
         start_secs: f64,
         end_secs: f64,
         repeat_count: i32,
-        interval_seconds: i32,
+        interval_seconds: f64,
     ) -> bool {
         let video_id = match self.rust().current_video_id {
             Some(video_id) => video_id,
             None => return false,
+        };
+        let interval_seconds = match normalized_interval_seconds(interval_seconds) {
+            Ok(value) => value,
+            Err(error) => return self.as_mut().report_error("保存片段失败", error),
         };
         let active_segment = (self.rust().active_index >= 0)
             .then(|| self.rust().segments.get(self.rust().active_index as usize))
@@ -304,7 +308,7 @@ impl qobject::SegmentBridge {
                 end: end_secs,
             },
             repeat_count: repeat_count.max(1) as u32,
-            interval_seconds: interval_seconds.max(0) as u32,
+            interval_seconds,
             completed_loops: matching_segment
                 .as_ref()
                 .map(|segment| segment.completed_loops)
@@ -335,11 +339,15 @@ impl qobject::SegmentBridge {
         start_secs: f64,
         end_secs: f64,
         repeat_count: i32,
-        interval_seconds: i32,
+        interval_seconds: f64,
     ) -> bool {
         let video_id = match self.rust().current_video_id {
             Some(video_id) => video_id,
             None => return false,
+        };
+        let interval_seconds = match normalized_interval_seconds(interval_seconds) {
+            Ok(value) => value,
+            Err(error) => return self.as_mut().report_error("添加识别片段失败", error),
         };
         if let Some(index) = matching_segment_index(&self.rust().segments, start_secs, end_secs) {
             return self.as_mut().activate_segment(index as i32);
@@ -353,7 +361,7 @@ impl qobject::SegmentBridge {
                 end: end_secs,
             },
             repeat_count: repeat_count.max(1) as u32,
-            interval_seconds: interval_seconds.max(0) as u32,
+            interval_seconds,
             completed_loops: 0,
             label: String::new(),
         };
@@ -389,7 +397,7 @@ impl qobject::SegmentBridge {
         self.as_mut()
             .set_active_repeat_count(segment.repeat_count as i32);
         self.as_mut()
-            .set_active_interval_seconds(segment.interval_seconds as i32);
+            .set_active_interval_seconds(segment.interval_seconds);
         self.as_mut()
             .set_active_completed_loops(segment.completed_loops as i32);
         self.as_mut()
@@ -647,12 +655,12 @@ impl qobject::SegmentBridge {
             .unwrap_or(0)
     }
 
-    fn segment_interval_seconds_at(self: Pin<&mut Self>, index: i32) -> i32 {
+    fn segment_interval_seconds_at(self: Pin<&mut Self>, index: i32) -> f64 {
         self.rust()
             .segments
             .get(index.max(0) as usize)
-            .map(|segment| segment.interval_seconds as i32)
-            .unwrap_or(0)
+            .map(|segment| segment.interval_seconds)
+            .unwrap_or(0.0)
     }
 
     fn segment_completed_loops_at(self: Pin<&mut Self>, index: i32) -> i32 {
@@ -793,7 +801,7 @@ impl qobject::SegmentBridge {
         self.as_mut().set_active_start(0.0);
         self.as_mut().set_active_end(0.0);
         self.as_mut().set_active_repeat_count(0);
-        self.as_mut().set_active_interval_seconds(0);
+        self.as_mut().set_active_interval_seconds(0.0);
         self.as_mut().set_active_completed_loops(0);
     }
 
@@ -814,6 +822,15 @@ impl qobject::SegmentBridge {
         self.as_mut().set_status_message(QString::from(&message));
         false
     }
+}
+
+fn normalized_interval_seconds(value: f64) -> Result<f64, els_types::AppError> {
+    if !value.is_finite() || value < 0.0 {
+        return Err(els_types::AppError::InvalidArgument(
+            "interval seconds must be a finite non-negative number".to_string(),
+        ));
+    }
+    Ok((value * 100.0).round() / 100.0)
 }
 
 fn matching_segment_index(
@@ -842,7 +859,7 @@ mod tests {
             video_id: 1,
             range: els_types::TimeRange { start, end },
             repeat_count: 1,
-            interval_seconds: 0,
+            interval_seconds: 0.0,
             completed_loops: 0,
             label: String::new(),
         }

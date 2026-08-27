@@ -11,23 +11,48 @@ SpinBox {
     property color disabledTextColor: "#6b7280"
     property color accentColor: "#2f6fed"
     property color accentBackgroundColor: "#eaf1fe"
+    property int decimals: 0
+    readonly property int scaleFactor: Math.pow(10, decimals)
 
     implicitHeight: 40
     leftPadding: 34
     rightPadding: 34
-    editable: false
+    editable: true
 
     contentItem: TextInput {
+        id: input
         z: 2
-        text: control.textFromValue(control.value, control.locale)
+        text: control.displayTextFromValue(control.value)
         color: control.enabled ? control.textColor : control.disabledTextColor
         opacity: control.enabled ? 1 : 0.65
         font: control.font
-        readOnly: true
-        selectByMouse: false
+        readOnly: !control.editable
+        selectByMouse: true
         horizontalAlignment: Qt.AlignHCenter
         verticalAlignment: Qt.AlignVCenter
         inputMethodHints: Qt.ImhFormattedNumbersOnly
+        validator: DoubleValidator {
+            bottom: control.from / control.scaleFactor
+            top: control.to / control.scaleFactor
+            decimals: control.decimals
+        }
+        onEditingFinished: control.value = control.parseValueFromText(text)
+    }
+
+    Connections {
+        target: control
+        function onValueChanged() {
+            input.text = control.displayTextFromValue(control.value)
+        }
+    }
+
+    function displayTextFromValue(value) {
+        return (value / scaleFactor).toFixed(decimals)
+    }
+
+    function parseValueFromText(text) {
+        var parsed = Number(String(text).replace(",", "."))
+        return isFinite(parsed) ? Math.round(parsed * scaleFactor) : control.value
     }
 
     down.indicator: Rectangle {

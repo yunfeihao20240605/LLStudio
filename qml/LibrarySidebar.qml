@@ -30,7 +30,7 @@ Rectangle {
     property int totalLoops: 0
     property string trainingStatus: ""
     readonly property int repeatCount: sidebarControlPanel.repeatCount
-    readonly property int intervalSeconds: sidebarControlPanel.intervalSeconds
+    readonly property real intervalSeconds: sidebarControlPanel.intervalSeconds
     readonly property bool hasActiveSegment: segmentBridge && segmentBridge.activeIndex >= 0
     readonly property bool hasDraftSelection: selectionAvailable
                                                && (!hasActiveSegment
@@ -43,7 +43,7 @@ Rectangle {
                                                            : (hasActiveSegment ? segmentBridge.activeEnd : 0)
 
     signal videoOpenRequested(string path)
-    signal startTrainingRequested(int repeatCount, int intervalSeconds)
+    signal startTrainingRequested(int repeatCount, real intervalSeconds)
 
     function applyTrainingSettings(repeatCount, intervalSeconds) {
         sidebarControlPanel.applyTrainingSettings(repeatCount, intervalSeconds)

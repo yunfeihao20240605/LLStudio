@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS segment (
     start_time REAL NOT NULL,
     end_time REAL NOT NULL,
     repeat_count INTEGER NOT NULL,
-    interval_seconds INTEGER NOT NULL DEFAULT 0,
+    interval_seconds REAL NOT NULL DEFAULT 0,
     completed_loops INTEGER NOT NULL DEFAULT 0,
     label TEXT NOT NULL DEFAULT ''
 );";

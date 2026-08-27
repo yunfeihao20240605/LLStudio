@@ -20,7 +20,7 @@ pub struct Segment {
     pub video_id: i64,
     pub range: TimeRange,
     pub repeat_count: u32,
-    pub interval_seconds: u32,
+    pub interval_seconds: f64,
     pub completed_loops: u32,
     pub label: String,
 }

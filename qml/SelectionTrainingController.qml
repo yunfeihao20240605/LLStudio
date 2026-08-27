@@ -33,7 +33,7 @@ QtObject {
     property bool internalHasActiveSession: false
     property int internalCompletedLoops: 0
     property int internalTotalLoops: 0
-    property int internalIntervalSeconds: 0
+    property real internalIntervalSeconds: 0
     property real activeRangeStart: 0
     property real activeRangeEnd: 0
     property string internalStatusMessage: ""
@@ -83,10 +83,18 @@ QtObject {
             normalizedRanges.push({ start: start, end: end })
         }
 
+        var normalizedRepeatCount = Math.floor(Number(repeatCount))
+        var normalizedIntervalSeconds = Number(intervalSeconds)
+        if (!isFinite(normalizedRepeatCount) || normalizedRepeatCount < 1
+                || !isFinite(normalizedIntervalSeconds)
+                || normalizedIntervalSeconds < 0)
+            return false
+
         intervalTimer.stop()
         cancelPendingPositionCheck()
-        internalTotalLoops = Math.max(1, Math.floor(repeatCount))
-        internalIntervalSeconds = Math.max(0, Math.floor(intervalSeconds))
+        internalTotalLoops = Math.max(1, normalizedRepeatCount)
+        internalIntervalSeconds = Math.max(0,
+                                           Math.round(normalizedIntervalSeconds * 100) / 100)
         internalCompletedLoops = 0
         internalRanges = normalizedRanges
         internalCurrentRangeIndex = 0
@@ -259,7 +267,7 @@ QtObject {
         }
 
         internalStatusMessage = internalIntervalSeconds > 0
-                ? "等待 " + internalIntervalSeconds + " 秒"
+                ? "等待 " + internalIntervalSeconds.toFixed(2).replace(/\.?0+$/, "") + " 秒"
                 : "准备下一次播放"
         intervalTimer.restart()
     }
@@ -299,7 +307,7 @@ QtObject {
     }
 
     property Timer intervalTimer: Timer {
-        interval: Math.max(1, root.internalIntervalSeconds * 1000)
+        interval: Math.max(1, Math.round(root.internalIntervalSeconds * 1000))
         repeat: false
         onTriggered: root.beginCurrentLoop()
     }

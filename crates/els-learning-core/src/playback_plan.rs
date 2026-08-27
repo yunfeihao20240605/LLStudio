@@ -59,7 +59,7 @@ mod tests {
             video_id: 1,
             range: els_types::TimeRange { start, end },
             repeat_count: 1,
-            interval_seconds: 0,
+            interval_seconds: 0.0,
             completed_loops: 0,
             label: label.to_string(),
         }
