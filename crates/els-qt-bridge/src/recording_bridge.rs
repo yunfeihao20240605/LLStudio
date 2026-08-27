@@ -450,9 +450,6 @@ impl qobject::RecordingBridge {
             Some(recording) => recording,
             None => return false,
         };
-        if let Err(error) = self.as_mut().rust_mut().manager.delete(&recording) {
-            return self.as_mut().report_error("删除录音失败", error);
-        }
         let mut leftovers = Vec::new();
         for path in recording.all_file_paths() {
             if let Err(error) = std::fs::remove_file(path) {
@@ -461,14 +458,20 @@ impl qobject::RecordingBridge {
                 }
             }
         }
+        if !leftovers.is_empty() {
+            let message = format!("有 {} 个录音文件未能删除", leftovers.len());
+            return self.as_mut().report_error(
+                "删除录音失败",
+                els_types::AppError::Io(message),
+            );
+        }
+        if let Err(error) = self.as_mut().rust_mut().manager.delete(&recording) {
+            return self.as_mut().report_error("删除录音记录失败", error);
+        }
         self.as_mut().rust_mut().session.load_recording(None);
         self.as_mut().clear_recording();
-        let message = if leftovers.is_empty() {
-            "录音及降噪版本已删除".to_string()
-        } else {
-            format!("录音记录已删除，但有 {} 个文件未能删除", leftovers.len())
-        };
-        self.as_mut().set_status_message(QString::from(&message));
+        self.as_mut()
+            .set_status_message(QString::from("录音及降噪版本已删除"));
         true
     }
 

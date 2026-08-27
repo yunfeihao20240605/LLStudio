@@ -132,13 +132,11 @@ impl ActiveCapture {
 }
 
 pub fn next_recording_path(video_id: i64) -> els_types::AppResult<PathBuf> {
-    let root = std::env::var_os("ELS_RECORDINGS_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join("recordings")
-        });
+    let root = recordings_root(
+        std::env::var_os("ELS_RECORDINGS_DIR"),
+        els_types::app_data_directory(),
+        std::env::temp_dir(),
+    );
     let directory = root.join(video_id.to_string());
     std::fs::create_dir_all(&directory).map_err(io_error)?;
     let timestamp = SystemTime::now()
@@ -146,6 +144,17 @@ pub fn next_recording_path(video_id: i64) -> els_types::AppResult<PathBuf> {
         .unwrap_or_default()
         .as_nanos();
     Ok(directory.join(format!("recording-{timestamp}.wav")))
+}
+
+fn recordings_root(
+    configured_root: Option<std::ffi::OsString>,
+    app_data_directory: Option<PathBuf>,
+    temp_directory: PathBuf,
+) -> PathBuf {
+    configured_root
+        .map(PathBuf::from)
+        .or_else(|| app_data_directory.map(|path| path.join("recordings")))
+        .unwrap_or_else(|| temp_directory.join("LLStudio").join("recordings"))
 }
 
 fn write_wav(
@@ -209,7 +218,9 @@ fn io_error(error: std::io::Error) -> els_types::AppError {
 
 #[cfg(test)]
 mod tests {
-    use super::write_wav;
+    use super::{next_recording_path, recordings_root, write_wav};
+    use std::ffi::OsString;
+    use std::path::PathBuf;
     use std::sync::mpsc;
 
     #[test]
@@ -235,5 +246,57 @@ mod tests {
         assert_eq!(reader.duration(), 4);
         drop(reader);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recording_root_prefers_override_then_app_data_then_temp() {
+        let temp_directory = PathBuf::from("/tmp/els-capture-test");
+        let app_data = PathBuf::from("/app-data/LLStudio");
+
+        assert_eq!(
+            recordings_root(
+                Some(OsString::from("/custom-recordings")),
+                Some(app_data.clone()),
+                temp_directory.clone(),
+            ),
+            PathBuf::from("/custom-recordings")
+        );
+        assert_eq!(
+            recordings_root(None, Some(app_data.clone()), temp_directory.clone()),
+            app_data.join("recordings")
+        );
+        assert_eq!(
+            recordings_root(None, None, temp_directory),
+            PathBuf::from("/tmp/els-capture-test/LLStudio/recordings")
+        );
+    }
+
+    #[test]
+    fn next_recording_path_creates_video_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "els-recordings-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let previous = std::env::var_os("ELS_RECORDINGS_DIR");
+        std::env::set_var("ELS_RECORDINGS_DIR", &root);
+
+        let path = next_recording_path(42).expect("recording path");
+        let expected_directory = root.join("42");
+        assert_eq!(path.parent(), Some(expected_directory.as_path()));
+        assert!(path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("recording-"));
+
+        match previous {
+            Some(value) => std::env::set_var("ELS_RECORDINGS_DIR", value),
+            None => std::env::remove_var("ELS_RECORDINGS_DIR"),
+        }
+        let _ = std::fs::remove_dir_all(root);
     }
 }

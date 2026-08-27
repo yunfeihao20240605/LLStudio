@@ -370,7 +370,7 @@ pub(crate) fn default_database_path() -> PathBuf {
     }
 
     let data_directory =
-        platform_data_directory().unwrap_or_else(|| std::env::temp_dir().join("LLStudio"));
+        els_types::app_data_directory().unwrap_or_else(|| std::env::temp_dir().join("LLStudio"));
     data_directory.join("english-learning-studio.sqlite3")
 }
 
@@ -383,37 +383,6 @@ pub(crate) fn prepare_database_path(path: impl AsRef<Path>) -> els_types::AppRes
         fs::create_dir_all(parent).map_err(|error| els_types::AppError::Io(error.to_string()))?;
     }
     Ok(path)
-}
-
-fn platform_data_directory() -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        return std::env::var_os("HOME").map(PathBuf::from).map(|path| {
-            path.join("Library")
-                .join("Application Support")
-                .join("LLStudio")
-        });
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        return std::env::var_os("APPDATA")
-            .or_else(|| std::env::var_os("LOCALAPPDATA"))
-            .map(PathBuf::from)
-            .map(|path| path.join("LLStudio"));
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        std::env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .map(PathBuf::from)
-                    .map(|path| path.join(".local").join("share"))
-            })
-            .map(|path| path.join("LLStudio"))
-    }
 }
 
 pub(crate) fn sqlite_error(error: rusqlite::Error) -> els_types::AppError {

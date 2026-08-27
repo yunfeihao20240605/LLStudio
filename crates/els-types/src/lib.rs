@@ -4,6 +4,43 @@
 //! `els-qt-bridge`、`els-app`），是整个 workspace 依赖图的最底层。
 //! 所有其他 crate 都可以依赖它，但它不能反向依赖任何其他 crate。
 
+use std::path::PathBuf;
+
+/// Returns the writable application data directory for the current platform.
+///
+/// The directory is not created by this helper. Callers should create the
+/// specific directory they need before writing files.
+pub fn app_data_directory() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        return std::env::var_os("HOME").map(PathBuf::from).map(|path| {
+            path.join("Library")
+                .join("Application Support")
+                .join("LLStudio")
+        });
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        return std::env::var_os("APPDATA")
+            .or_else(|| std::env::var_os("LOCALAPPDATA"))
+            .map(PathBuf::from)
+            .map(|path| path.join("LLStudio"));
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .map(|path| path.join(".local").join("share"))
+            })
+            .map(|path| path.join("LLStudio"))
+    }
+}
+
 /// 时间范围（秒），用于表示视频片段、字幕区间、波形选区等。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimeRange {
