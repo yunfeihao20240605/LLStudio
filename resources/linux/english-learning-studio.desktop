@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=LLStudio
+Comment=English listening and language learning studio
+Exec=/usr/bin/els-app
+Icon=english-learning-studio
+Terminal=false
+Type=Application
+Categories=Education;
+StartupNotify=true

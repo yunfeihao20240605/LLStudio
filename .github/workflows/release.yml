@@ -215,6 +215,7 @@ jobs:
 
           macdeployqt "dist/LLStudio.app" -qmldir=qml -always-overwrite
           rm -rf "dist/LLStudio.app/Contents/PlugIns/sqldrivers"
+          cp resources/icons/macos/LLStudio.icns "dist/LLStudio.app/Contents/Resources/LLStudio.icns"
           export FFMPEG_PREFIX="$(brew --prefix ffmpeg)"
           export MPV_PREFIX="$(brew --prefix mpv)"
           cp "$FFMPEG_PREFIX/bin/ffmpeg" "dist/LLStudio.app/Contents/MacOS/ffmpeg"

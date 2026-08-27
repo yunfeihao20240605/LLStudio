@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.1.3] - 2026-08-27
+
+### 新增 (Features)
+- 使用统一应用图标，支持 Qt 窗口、Windows、macOS 和 Debian/Linux 桌面环境
+- 增加 Windows `.ico`、macOS `.icns` 和 Linux hicolor 多尺寸图标资源
+
+### 修复 (Bug Fixes)
+- 修复 macOS 从 DMG 启动时录音目录落到只读当前工作目录导致无法创建录音的问题
+- 修复录音文件删除失败时数据库记录先被删除的问题
+
+---
+
 ## [v0.1.2] - 2026-08-25
 
 ### 修复 (Bug Fixes)
@@ -38,4 +50,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - 项目初始化
 - 英语听力学习核心功能框架
 - 字幕、波形、录音、笔记、AI 辅导等模块骨架
-

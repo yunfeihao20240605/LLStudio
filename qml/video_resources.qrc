@@ -4,5 +4,6 @@
     <file alias="video-empty-decoration.svg">video-empty-decoration.svg</file>
     <file alias="llstudio-brand.png">llstudio-brand.png</file>
     <file alias="llstudio-brand-light.png">llstudio-brand-light.png</file>
+    <file alias="app-icon.png">../resources/icons/app-icon.png</file>
   </qresource>
 </RCC>

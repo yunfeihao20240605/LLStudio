@@ -1,5 +1,5 @@
 !define PRODUCT_NAME "LLStudio"
-!define PRODUCT_VERSION "0.1.2"
+!define PRODUCT_VERSION "0.1.3"
 !define PRODUCT_PUBLISHER "yunfeihao20240605"
 !define PRODUCT_WEB_SITE "https://github.com/yunfeihao20240605/LLStudio"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\els-app.exe"
@@ -13,6 +13,7 @@ RequestExecutionLevel admin
 
 ; MUI Settings
 !define MUI_ABORTWARNING
+Icon "resources\icons\windows\LLStudio.ico"
 
 ; Welcome page
 !insertmacro MUI_PAGE_WELCOME

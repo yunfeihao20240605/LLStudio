@@ -2,6 +2,7 @@ use cxx_qt_build::{CxxQtBuilder, QmlModule};
 use std::path::PathBuf;
 
 fn main() {
+    embed_windows_icon();
     embed_macos_info_plist();
     CxxQtBuilder::new_qml_module(
         QmlModule::new("com.yfhao.els.app")
@@ -46,6 +47,21 @@ fn main() {
     .qt_module("QuickControls2")
     .build();
 }
+
+#[cfg(windows)]
+fn embed_windows_icon() {
+    let icon = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../resources/icons/windows/LLStudio.ico");
+    println!("cargo:rerun-if-changed={}", icon.display());
+    let mut resource = winresource::WindowsResource::new();
+    resource.set_icon(&icon.to_string_lossy());
+    resource
+        .compile()
+        .expect("failed to embed Windows application icon");
+}
+
+#[cfg(not(windows))]
+fn embed_windows_icon() {}
 
 fn embed_macos_info_plist() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {

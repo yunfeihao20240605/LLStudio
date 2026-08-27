@@ -22,6 +22,9 @@ els-qt-bridge = { path = "../els-qt-bridge" }
 [build-dependencies]
 cxx-qt-build.workspace = true
 
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
 [package.metadata.deb]
 name = "english-learning-studio"
 maintainer = "yunfeihao20240605 <yfhao@example.com>"
@@ -32,6 +35,14 @@ section = "utility"
 priority = "optional"
 assets = [
     ["target/release/els-app", "usr/bin/els-app", "755"],
+    ["../../resources/linux/english-learning-studio.desktop", "usr/share/applications/english-learning-studio.desktop", "644"],
+    ["../../resources/icons/linux/16x16/english-learning-studio.png", "usr/share/icons/hicolor/16x16/apps/english-learning-studio.png", "644"],
+    ["../../resources/icons/linux/32x32/english-learning-studio.png", "usr/share/icons/hicolor/32x32/apps/english-learning-studio.png", "644"],
+    ["../../resources/icons/linux/48x48/english-learning-studio.png", "usr/share/icons/hicolor/48x48/apps/english-learning-studio.png", "644"],
+    ["../../resources/icons/linux/64x64/english-learning-studio.png", "usr/share/icons/hicolor/64x64/apps/english-learning-studio.png", "644"],
+    ["../../resources/icons/linux/128x128/english-learning-studio.png", "usr/share/icons/hicolor/128x128/apps/english-learning-studio.png", "644"],
+    ["../../resources/icons/linux/256x256/english-learning-studio.png", "usr/share/icons/hicolor/256x256/apps/english-learning-studio.png", "644"],
+    ["../../resources/icons/linux/512x512/english-learning-studio.png", "usr/share/icons/hicolor/512x512/apps/english-learning-studio.png", "644"],
 ]
 # Keep the package installable on Debian/Ubuntu while retaining cargo-deb's
 # automatic ELF dependency discovery for the Qt libraries.
