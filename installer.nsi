@@ -1,4 +1,4 @@
-!define PRODUCT_NAME "English Learning Studio"
+!define PRODUCT_NAME "LLStudio"
 !define PRODUCT_VERSION "0.1.2"
 !define PRODUCT_PUBLISHER "yunfeihao20240605"
 !define PRODUCT_WEB_SITE "https://github.com/yunfeihao20240605/LLStudio"
@@ -34,7 +34,7 @@ RequestExecutionLevel admin
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 OutFile "LLStudio-Setup.exe"
-InstallDir "$PROGRAMFILES64\English Learning Studio"
+InstallDir "$PROGRAMFILES64\LLStudio"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
 ShowUnInstDetails show
@@ -45,9 +45,9 @@ Section "MainSection" SEC01
   SetOverwrite ifnewer
   File /r "dist\*.*"
 
-  CreateDirectory "$SMPROGRAMS\English Learning Studio"
-  CreateShortCut "$SMPROGRAMS\English Learning Studio\English Learning Studio.lnk" "$INSTDIR\els-app.exe"
-  CreateShortCut "$DESKTOP\English Learning Studio.lnk" "$INSTDIR\els-app.exe"
+  CreateDirectory "$SMPROGRAMS\LLStudio"
+  CreateShortCut "$SMPROGRAMS\LLStudio\LLStudio.lnk" "$INSTDIR\els-app.exe"
+  CreateShortCut "$DESKTOP\LLStudio.lnk" "$INSTDIR\els-app.exe"
 SectionEnd
 
 Section -Post
@@ -62,19 +62,19 @@ SectionEnd
 
 Function un.onUninstSuccess
   HideWindow
-  MessageBox MB_OK "English Learning Studio was successfully uninstalled."
+  MessageBox MB_OK "LLStudio was successfully uninstalled."
 FunctionEnd
 
 Function un.onInit
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to remove English Learning Studio?" IDYES +2
+  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to remove LLStudio?" IDYES +2
   Abort
 FunctionEnd
 
 Section Uninstall
   SetShellVarContext all
-  Delete "$DESKTOP\English Learning Studio.lnk"
-  Delete "$SMPROGRAMS\English Learning Studio\English Learning Studio.lnk"
-  RMDir "$SMPROGRAMS\English Learning Studio"
+  Delete "$DESKTOP\LLStudio.lnk"
+  Delete "$SMPROGRAMS\LLStudio\LLStudio.lnk"
+  RMDir "$SMPROGRAMS\LLStudio"
 
   RMDir /r "$INSTDIR"
 
