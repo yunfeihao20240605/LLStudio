@@ -1,4 +1,4 @@
-use crate::sqlite::{default_database_path, ensure_schema, sqlite_error};
+use crate::sqlite::{default_database_path, ensure_schema, prepare_database_path, sqlite_error};
 use els_recording_core::{NewRecording, Recording, RecordingRepository};
 use els_types::TimeRange;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -15,6 +15,7 @@ impl SqliteRecordingRepository {
     }
 
     pub fn open_path(path: impl AsRef<Path>) -> els_types::AppResult<Self> {
+        let path = prepare_database_path(path)?;
         let connection = Connection::open(path).map_err(sqlite_error)?;
         ensure_schema(&connection)?;
         Ok(Self {

@@ -5,6 +5,7 @@ use crate::schema::{
     CREATE_VIDEO_LIST_TABLE, CREATE_VIDEO_NOTE_TABLE, CREATE_VIDEO_TABLE,
 };
 use rusqlite::{params, Connection};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -18,6 +19,7 @@ impl SqliteSegmentRepository {
     }
 
     pub fn open_path(path: impl AsRef<Path>) -> els_types::AppResult<Self> {
+        let path = prepare_database_path(path)?;
         let connection = Connection::open(path).map_err(sqlite_error)?;
         ensure_schema(&connection)?;
         Ok(Self {
@@ -366,9 +368,52 @@ pub(crate) fn default_database_path() -> PathBuf {
     if let Ok(path) = std::env::var("ELS_DB_PATH") {
         return PathBuf::from(path);
     }
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("english-learning-studio.sqlite3")
+
+    let data_directory =
+        platform_data_directory().unwrap_or_else(|| std::env::temp_dir().join("LLStudio"));
+    data_directory.join("english-learning-studio.sqlite3")
+}
+
+pub(crate) fn prepare_database_path(path: impl AsRef<Path>) -> els_types::AppResult<PathBuf> {
+    let path = path.as_ref().to_path_buf();
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|error| els_types::AppError::Io(error.to_string()))?;
+    }
+    Ok(path)
+}
+
+fn platform_data_directory() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        return std::env::var_os("HOME").map(PathBuf::from).map(|path| {
+            path.join("Library")
+                .join("Application Support")
+                .join("LLStudio")
+        });
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        return std::env::var_os("APPDATA")
+            .or_else(|| std::env::var_os("LOCALAPPDATA"))
+            .map(PathBuf::from)
+            .map(|path| path.join("LLStudio"));
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .map(|path| path.join(".local").join("share"))
+            })
+            .map(|path| path.join("LLStudio"))
+    }
 }
 
 pub(crate) fn sqlite_error(error: rusqlite::Error) -> els_types::AppError {

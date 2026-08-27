@@ -1,6 +1,7 @@
 //! 用户偏好设置存取实现（例如 3.3 节的主题模式 light/dark/auto）。
 
 use crate::schema::{CREATE_AI_CONVERSATIONS_TABLE, CREATE_SETTINGS_TABLE};
+use crate::sqlite::{default_database_path, prepare_database_path};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 
@@ -10,12 +11,10 @@ pub const AI_API_KEY_KEY: &str = "ai.api_key";
 pub const AI_MODEL_KEY: &str = "ai.model";
 pub const AI_SYSTEM_PROMPT_KEY: &str = "ai.system_prompt";
 
-const DEFAULT_DB_FILE_NAME: &str = "english-learning-studio.sqlite3";
-
 /// `settings` 表的存取封装。
 ///
-/// 当前阶段默认把 SQLite 文件放在工作目录下，可通过 `ELS_DB_PATH` 覆盖，
-/// 这样本地开发和自动化测试都能使用同一套接口。
+/// 默认把 SQLite 文件放在当前平台用户可写的应用数据目录下，
+/// 可通过 `ELS_DB_PATH` 覆盖，这样本地开发和自动化测试都能使用同一套接口。
 pub struct SettingsStore {
     connection: Option<Connection>,
     db_path: PathBuf,
@@ -23,7 +22,7 @@ pub struct SettingsStore {
 
 impl SettingsStore {
     pub fn open_default() -> els_types::AppResult<Self> {
-        let db_path = default_database_path();
+        let db_path = prepare_database_path(default_database_path())?;
         let connection = Connection::open(&db_path).map_err(sqlite_error)?;
         ensure_schema(&connection)?;
 
@@ -187,16 +186,6 @@ fn ensure_schema(connection: &Connection) -> els_types::AppResult<()> {
         .execute_batch(CREATE_SETTINGS_TABLE)
         .and_then(|_| connection.execute_batch(CREATE_AI_CONVERSATIONS_TABLE))
         .map_err(sqlite_error)
-}
-
-fn default_database_path() -> PathBuf {
-    if let Ok(path) = std::env::var("ELS_DB_PATH") {
-        return PathBuf::from(path);
-    }
-
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(DEFAULT_DB_FILE_NAME)
 }
 
 fn sqlite_error(error: rusqlite::Error) -> els_types::AppError {

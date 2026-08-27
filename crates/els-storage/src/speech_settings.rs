@@ -1,8 +1,7 @@
 use crate::schema::CREATE_SPEECH_PROVIDER_PROFILE_TABLE;
+use crate::sqlite::{default_database_path, prepare_database_path};
 use rusqlite::{params, Connection, OptionalExtension};
-use std::path::{Path, PathBuf};
-
-const DEFAULT_DB_FILE_NAME: &str = "english-learning-studio.sqlite3";
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpeechProviderProfile {
@@ -23,6 +22,7 @@ impl SpeechSettingsRepository {
     }
 
     pub fn open_path(path: impl AsRef<Path>) -> els_types::AppResult<Self> {
+        let path = prepare_database_path(path)?;
         let connection = Connection::open(path).map_err(sqlite_error)?;
         connection
             .execute_batch(CREATE_SPEECH_PROVIDER_PROFILE_TABLE)
@@ -104,15 +104,6 @@ impl Default for SpeechSettingsRepository {
     fn default() -> Self {
         Self::open_default().unwrap_or_else(|_| Self::disabled())
     }
-}
-
-fn default_database_path() -> PathBuf {
-    if let Ok(path) = std::env::var("ELS_DB_PATH") {
-        return PathBuf::from(path);
-    }
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(DEFAULT_DB_FILE_NAME)
 }
 
 fn sqlite_error(error: rusqlite::Error) -> els_types::AppError {
