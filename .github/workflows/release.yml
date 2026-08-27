@@ -72,16 +72,19 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         run: |
           if [ "${{ matrix.target_triple }}" = "x86_64-apple-darwin" ]; then
-            if brew list --formula ffmpeg >/dev/null 2>&1; then
-              brew reinstall ffmpeg
-            else
-              brew install ffmpeg
-            fi
+            # macos-15-intel currently provides FFmpeg 9, while ffmpeg-next
+            # 8.1.0 requires the FFmpeg 8 headers and constants.
+            brew install mpv pkg-config
+            brew tap-new --no-git local/ffmpeg8
+            brew extract --version=8.1.2 --git-revision=c7348004c5876a7cddfa236babd4bf3489f21d87 ffmpeg local/ffmpeg8
+            brew install local/ffmpeg8/ffmpeg@8.1.2
+            FFMPEG_FORMULA="local/ffmpeg8/ffmpeg@8.1.2"
           else
             brew install ffmpeg
+            brew install mpv pkg-config
+            FFMPEG_FORMULA="ffmpeg"
           fi
-          brew install mpv pkg-config
-          FFMPEG_PREFIX="$(brew --prefix ffmpeg)"
+          FFMPEG_PREFIX="$(brew --prefix "$FFMPEG_FORMULA")"
           MPV_PREFIX="$(brew --prefix mpv)"
           FFMPEG_PKGCONFIG="$FFMPEG_PREFIX/lib/pkgconfig"
           MPV_PKGCONFIG="$MPV_PREFIX/lib/pkgconfig"
@@ -96,6 +99,7 @@ jobs:
           fi
           echo "Using FFmpeg libraries from: $FFMPEG_LIBDIR"
           echo "FFMPEG_DIR=$FFMPEG_PREFIX" >> $GITHUB_ENV
+          echo "FFMPEG_FORMULA=$FFMPEG_FORMULA" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS_x86_64_apple_darwin=1" >> $GITHUB_ENV
           echo "MACOSX_DEPLOYMENT_TARGET=12.0" >> $GITHUB_ENV
@@ -216,7 +220,7 @@ jobs:
           macdeployqt "dist/LLStudio.app" -qmldir=qml -always-overwrite
           rm -rf "dist/LLStudio.app/Contents/PlugIns/sqldrivers"
           cp resources/icons/macos/LLStudio.icns "dist/LLStudio.app/Contents/Resources/LLStudio.icns"
-          export FFMPEG_PREFIX="$(brew --prefix ffmpeg)"
+          export FFMPEG_PREFIX="$(brew --prefix "$FFMPEG_FORMULA")"
           export MPV_PREFIX="$(brew --prefix mpv)"
           cp "$FFMPEG_PREFIX/bin/ffmpeg" "dist/LLStudio.app/Contents/MacOS/ffmpeg"
           cp "$FFMPEG_PREFIX/bin/ffprobe" "dist/LLStudio.app/Contents/MacOS/ffprobe"
