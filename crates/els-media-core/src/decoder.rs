@@ -3,6 +3,7 @@
 //! 为后续接入更底层的 libav* 播放/解码链路做准备。
 
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +25,7 @@ impl Decoder {
             ));
         }
 
-        let output = Command::new("ffprobe")
+        let output = Command::new(ffprobe_cli_path())
             .args([
                 "-v",
                 "error",
@@ -86,6 +87,31 @@ impl Decoder {
             audio_codec,
         })
     }
+}
+
+fn ffprobe_cli_path() -> PathBuf {
+    if let Ok(value) = std::env::var("ELS_FFPROBE_BIN") {
+        return PathBuf::from(value);
+    }
+
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            let bundled = directory.join(if cfg!(target_os = "windows") {
+                "ffprobe.exe"
+            } else {
+                "ffprobe"
+            });
+            if bundled.exists() {
+                return bundled;
+            }
+        }
+    }
+
+    PathBuf::from(if cfg!(target_os = "windows") {
+        "ffprobe.exe"
+    } else {
+        "ffprobe"
+    })
 }
 
 #[derive(Debug, Deserialize)]

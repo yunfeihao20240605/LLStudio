@@ -544,6 +544,19 @@ fn ffmpeg_cli_path() -> PathBuf {
         return PathBuf::from(value);
     }
 
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            let bundled = directory.join(if cfg!(target_os = "windows") {
+                "ffmpeg.exe"
+            } else {
+                "ffmpeg"
+            });
+            if bundled.exists() {
+                return bundled;
+            }
+        }
+    }
+
     for candidate in [
         "/opt/local/bin/ffmpeg",
         "/usr/local/bin/ffmpeg",

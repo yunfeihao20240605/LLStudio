@@ -18,7 +18,8 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            target_name: windows
+            target_name: windows-gnu
+            target_triple: x86_64-pc-windows-gnu
             artifact_name: LLStudio-Setup.exe
           - os: ubuntu-22.04
             target_name: linux
@@ -42,7 +43,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Add Rust target
-        if: startsWith(matrix.os, 'macos')
+        if: matrix.target_triple
         run: rustup target add ${{ matrix.target_triple }}
 
       - name: Cache Cargo build
@@ -52,7 +53,7 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.6.3'
-          arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2019_64' || '' }}
+          arch: ${{ matrix.os == 'windows-latest' && 'win64_mingw' || '' }}
 
       - name: Export Qt6 CMAKE_PREFIX_PATH
         run: |
@@ -100,27 +101,51 @@ jobs:
 
       - name: Setup FFmpeg & mpv (Windows)
         if: matrix.os == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
-          FFMPEG_URL=$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases | grep "browser_download_url" | grep "win64-gpl-shared-6.1.zip" | cut -d '"' -f 4 | head -n 1)
-          FFMPEG_URL=${FFMPEG_URL:-https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-05-31-12-53/ffmpeg-n6.1-latest-win64-gpl-shared-6.1.zip}
-          echo "Downloading FFmpeg 6.1 from: $FFMPEG_URL"
-          curl -L -o ffmpeg.zip "$FFMPEG_URL"
-          unzip ffmpeg.zip
-          mv ffmpeg-n* C:/ffmpeg || mv ffmpeg-master* C:/ffmpeg || mv ffmpeg-6* C:/ffmpeg
-          echo "FFMPEG_DIR=C:/ffmpeg" >> $GITHUB_ENV
-          echo "C:/ffmpeg/bin" >> $GITHUB_PATH
+          $ffmpegRelease = Invoke-RestMethod https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest
+          $ffmpegAsset = $ffmpegRelease.assets |
+            Where-Object { $_.name -match '^ffmpeg-n\d+.*win64-gpl-shared.*\.zip$' } |
+            Select-Object -First 1
+          if (-not $ffmpegAsset) {
+            $ffmpegAsset = $ffmpegRelease.assets |
+              Where-Object { $_.name -match '^ffmpeg-master-latest-win64-(gpl|lgpl)-shared\.zip$' } |
+              Select-Object -First 1
+          }
+          if (-not $ffmpegAsset) { throw "No x64 shared FFmpeg asset found" }
+          Invoke-WebRequest $ffmpegAsset.browser_download_url -OutFile ffmpeg.zip
+          Remove-Item C:/ffmpeg-unpack -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive ffmpeg.zip -DestinationPath C:/ffmpeg-unpack
+          $ffmpegExe = Get-ChildItem C:/ffmpeg-unpack -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ffmpegExe) { throw "Downloaded FFmpeg archive has no ffmpeg.exe" }
+          New-Item -ItemType Directory -Force C:/ffmpeg | Out-Null
+          Copy-Item "$($ffmpegExe.Directory.Parent.FullName)/*" C:/ffmpeg -Recurse -Force
+          "FFMPEG_DIR=C:/ffmpeg" >> $env:GITHUB_ENV
+          "C:/ffmpeg/bin" >> $env:GITHUB_PATH
 
-          MPV_URL=$(curl -s https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest | grep "browser_download_url" | grep "mpv-dev-x86_64" | cut -d '"' -f 4 | head -n 1)
-          echo "Downloading mpv dev from: $MPV_URL"
-          curl -L -o mpv-dev.7z "$MPV_URL"
-          7z x mpv-dev.7z -oC:/mpv
-          echo "MPV_PREFIX=C:/mpv" >> $GITHUB_ENV
-          echo "C:/mpv" >> $GITHUB_PATH
-
-      - name: Setup MSVC (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: ilammy/msvc-dev-cmd@v1
+          $mpvRelease = Invoke-RestMethod https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest
+          $mpvDevAsset = $mpvRelease.assets |
+            Where-Object { $_.name -match '^mpv-dev-x86_64-.*\.7z$' -and $_.name -notmatch '-v3-' } |
+            Select-Object -First 1
+          $mpvRuntimeAsset = $mpvRelease.assets |
+            Where-Object { $_.name -match '^mpv-x86_64-.*\.7z$' -and $_.name -notmatch '-v3-' } |
+            Select-Object -First 1
+          if (-not $mpvDevAsset -or -not $mpvRuntimeAsset) { throw "No x64 mpv dev/runtime assets found" }
+          Remove-Item C:/mpv-dev,C:/mpv-runtime -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path C:/mpv-dev,C:/mpv-runtime | Out-Null
+          Invoke-WebRequest $mpvDevAsset.browser_download_url -OutFile mpv-dev.7z
+          Invoke-WebRequest $mpvRuntimeAsset.browser_download_url -OutFile mpv-runtime.7z
+          7z x mpv-dev.7z -oC:/mpv-dev -y | Out-Null
+          7z x mpv-runtime.7z -oC:/mpv-runtime -y | Out-Null
+          $mpvLib = Get-ChildItem C:/mpv-dev -Recurse -Filter libmpv.dll.a | Select-Object -First 1
+          if (-not $mpvLib) { throw "Downloaded mpv development archive has no libmpv.dll.a" }
+          $mpvPrefix = if ($mpvLib.Directory.Name -eq "lib") {
+            $mpvLib.Directory.Parent.FullName
+          } else {
+            $mpvLib.Directory.FullName
+          }
+          "MPV_PREFIX=$mpvPrefix" >> $env:GITHUB_ENV
+          "MPV_RUNTIME_DIR=C:/mpv-runtime" >> $env:GITHUB_ENV
 
       # ----------------------------------------------------
       # Windows 打包流程 (.exe 安装包 via NSIS)
@@ -136,13 +161,16 @@ jobs:
             throw "NSIS was not installed: $makensis"
           }
           $env:Path = "$nsisDir;$env:Path"
-          cargo build --release -p els-app
+          cargo build --release -p els-app --target ${{ matrix.target_triple }}
           New-Item -ItemType Directory -Force -Path dist
-          Copy-Item target/release/els-app.exe dist/
-          Copy-Item C:/ffmpeg/bin/*.dll dist/
-          Copy-Item C:/mpv/*.dll dist/ -ErrorAction SilentlyContinue
-          Copy-Item C:/mpv/lib*.dll dist/ -ErrorAction SilentlyContinue
-          windeployqt --qmldir qml dist/els-app.exe
+          Copy-Item target/${{ matrix.target_triple }}/release/els-app.exe dist/
+          Copy-Item -Path @(C:/ffmpeg/bin/*.dll,C:/ffmpeg/bin/ffmpeg.exe,C:/ffmpeg/bin/ffprobe.exe) -Destination dist -Force
+          foreach ($runtimeDir in @($env:MPV_RUNTIME_DIR, $env:MPV_PREFIX)) {
+            Get-ChildItem $runtimeDir -Recurse -Filter *.dll -File -ErrorAction SilentlyContinue |
+              Copy-Item -Destination dist -Force
+          }
+          windeployqt --qmldir qml --compiler-runtime --no-translations dist/els-app.exe
+          pwsh -File scripts/validate-windows-package.ps1 -Dist dist
           & $makensis installer.nsi
 
       # ----------------------------------------------------
@@ -155,6 +183,11 @@ jobs:
           cargo build --release -p els-app
           cargo deb -p els-app --no-build -o ${{ matrix.artifact_name }} || \
             cp target/debian/*.deb ${{ matrix.artifact_name }}
+          QT_LIB_DIR="$(find "$Qt6_DIR" -name 'libQt6Core.so.6' -print -quit 2>/dev/null | xargs -r dirname)"
+          if [ -n "$QT_LIB_DIR" ]; then
+            export LD_LIBRARY_PATH="$QT_LIB_DIR:${LD_LIBRARY_PATH:-}"
+          fi
+          bash scripts/validate-debian-package.sh "${{ matrix.artifact_name }}"
 
       # ----------------------------------------------------
       # macOS 打包流程 (.dmg)
@@ -179,6 +212,11 @@ jobs:
           cp target/${{ matrix.target_triple }}/release/els-app "dist/LLStudio.app/Contents/MacOS/els-app"
             
           macdeployqt "dist/LLStudio.app" -qmldir=qml -always-overwrite
+          export FFMPEG_PREFIX="$(brew --prefix ffmpeg)"
+          export MPV_PREFIX="$(brew --prefix mpv)"
+          cp "$FFMPEG_PREFIX/bin/ffmpeg" "dist/LLStudio.app/Contents/MacOS/ffmpeg"
+          cp "$FFMPEG_PREFIX/bin/ffprobe" "dist/LLStudio.app/Contents/MacOS/ffprobe"
+          bash scripts/package-macos-bundle.sh "dist/LLStudio.app" "${{ matrix.target_triple == 'aarch64-apple-darwin' && 'arm64' || 'x86_64' }}"
           
           brew install create-dmg
           create-dmg \

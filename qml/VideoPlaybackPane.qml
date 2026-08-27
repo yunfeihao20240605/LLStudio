@@ -26,6 +26,7 @@ Rectangle {
     signal manualSeekRequested(real positionSecs)
     signal normalPlaybackToggleRequested()
     signal videoLoadStarted()
+    signal videoLoadFailed(string message)
     signal videoLoaded(string path, real durationSecs)
     signal fullScreenToggleRequested()
 
@@ -80,12 +81,18 @@ Rectangle {
     }
 
     function loadVideoAndRelatedAssets(path) {
-        if (!mediaBridge || !path || path.trim().length === 0)
+        if (!mediaBridge) {
+            root.videoLoadFailed("媒体播放器不可用")
+            return
+        }
+        if (!path || path.trim().length === 0)
             return
 
         root.videoLoadStarted()
-        if (!mediaBridge.loadVideoPath(path))
+        if (!mediaBridge.loadVideoPath(path)) {
+            root.videoLoadFailed(mediaBridge.statusMessage)
             return
+        }
 
         if (subtitleBridge)
             subtitleBridge.loadForVideoPath(path)

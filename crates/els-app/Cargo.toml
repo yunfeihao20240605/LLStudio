@@ -26,11 +26,31 @@ cxx-qt-build.workspace = true
 name = "english-learning-studio"
 maintainer = "yunfeihao20240605 <yfhao@example.com>"
 copyright = "2026, yunfeihao20240605"
-license-file = ["../../LICENSE"]
+license-file = ["../../LICENSE", 0]
 extended-description = "English Learning Studio - An advanced desktop application for audio listening and language training."
 section = "utility"
 priority = "optional"
 assets = [
     ["target/release/els-app", "usr/bin/els-app", "755"],
 ]
-
+# Keep the package installable on Debian/Ubuntu while retaining cargo-deb's
+# automatic ELF dependency discovery for the Qt libraries.
+depends = [
+    "$auto",
+    "ffmpeg",
+    "libmpv2 | libmpv1",
+    "libqt6core6",
+    "libqt6gui6",
+    "libqt6network6",
+    "libqt6opengl6",
+    "libqt6qml6",
+    "libqt6quick6",
+    "libqt6quickcontrols2-6",
+    "qml6-module-qtqml",
+    "qml6-module-qt-labs-platform",
+    "qml6-module-qtquick",
+    "qml6-module-qtquick-controls",
+    "qml6-module-qtquick-layouts",
+    "qml6-module-qtquick-templates",
+    "qml6-module-qtquick-window",
+]

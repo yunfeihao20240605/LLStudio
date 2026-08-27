@@ -45,7 +45,8 @@ fn main() {
     }
 
     if let Some(prefix) = mpv_prefix {
-        // Always add prefix root (Windows shinchiro dev pkg places mpv.lib here)
+        // Always add prefix root (Windows shinchiro dev pkg places
+        // libmpv.dll.a and libmpv-2.dll here)
         println!("cargo:rustc-link-search=native={}", prefix.display());
         // Also add prefix/lib if it exists (Linux/macOS Homebrew layout)
         let lib_dir = prefix.join("lib");
@@ -55,6 +56,7 @@ fn main() {
     }
 
     println!("cargo:rerun-if-env-changed=MPV_PREFIX");
+    println!("cargo:rerun-if-env-changed=TARGET");
     println!("cargo:rustc-link-lib=dylib=mpv");
 
     builder.build().export();
@@ -68,22 +70,34 @@ fn detect_mpv_prefix() -> Option<PathBuf> {
         }
     }
 
-    if let Ok(output) = Command::new("brew").args(["--prefix", "mpv"]).output() {
-        if output.status.success() {
-            let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !prefix.is_empty() {
-                let path = PathBuf::from(prefix);
-                if path.exists() {
-                    return Some(path);
+    if std::env::var("TARGET")
+        .map(|target| target.contains("apple-darwin"))
+        .unwrap_or(false)
+    {
+        if let Ok(output) = Command::new("brew").args(["--prefix", "mpv"]).output() {
+            if output.status.success() {
+                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !prefix.is_empty() {
+                    let path = PathBuf::from(prefix);
+                    if path.exists() {
+                        return Some(path);
+                    }
                 }
             }
         }
     }
 
-    let default = PathBuf::from("/usr/local/opt/mpv");
-    if default.exists() {
-        Some(default)
-    } else {
-        None
+    if std::env::var("TARGET")
+        .map(|target| target.contains("apple-darwin"))
+        .unwrap_or(false)
+    {
+        for default in ["/opt/homebrew/opt/mpv", "/usr/local/opt/mpv"] {
+            let path = PathBuf::from(default);
+            if path.exists() {
+                return Some(path);
+            }
+        }
     }
+
+    None
 }

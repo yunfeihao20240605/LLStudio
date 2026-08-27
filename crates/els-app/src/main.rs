@@ -55,4 +55,33 @@ fn configure_process_environment() {
         libc::setlocale(libc::LC_ALL, c"C.UTF-8".as_ptr());
         libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr());
     }
+
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            let ffmpeg_name = if cfg!(target_os = "windows") {
+                "ffmpeg.exe"
+            } else {
+                "ffmpeg"
+            };
+            let ffprobe_name = if cfg!(target_os = "windows") {
+                "ffprobe.exe"
+            } else {
+                "ffprobe"
+            };
+            if directory.join(ffmpeg_name).exists() {
+                std::env::set_var("ELS_FFMPEG_BIN", directory.join(ffmpeg_name));
+            }
+            if directory.join(ffprobe_name).exists() {
+                std::env::set_var("ELS_FFPROBE_BIN", directory.join(ffprobe_name));
+            }
+            let current_path = std::env::var_os("PATH").unwrap_or_default();
+            let mut paths = std::env::split_paths(&current_path).collect::<Vec<_>>();
+            if !paths.iter().any(|path| path == directory) {
+                paths.insert(0, directory.to_path_buf());
+                if let Ok(path) = std::env::join_paths(paths) {
+                    std::env::set_var("PATH", path);
+                }
+            }
+        }
+    }
 }

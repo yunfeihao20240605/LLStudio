@@ -970,9 +970,14 @@ ApplicationWindow {
                     }
                     onNormalPlaybackToggleRequested: root.toggleNormalPlayback()
                     onVideoLoadStarted: {
+                        themeBridge.reportError("")
                         root.savePlaybackProgress()
                         aiTutorBridge.setSubtitleContext("", -1, 0, 0,
                                                          "", "", "", "")
+                    }
+                    onVideoLoadFailed: function(message) {
+                        themeBridge.reportError(message.length > 0
+                                                ? message : "视频加载失败")
                     }
                     onVideoLoaded: function(path, durationSecs) {
                         trainingController.stopTraining()

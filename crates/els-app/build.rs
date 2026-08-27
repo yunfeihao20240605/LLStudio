@@ -58,4 +58,8 @@ fn embed_macos_info_plist() {
         "cargo:rustc-link-arg=-Wl,-sectcreate,__TEXT,__info_plist,{}",
         plist.display()
     );
+    // The release bundle puts libmpv and its non-Apple dependencies in
+    // Contents/Frameworks. Keep the executable independent of Homebrew's
+    // absolute install path after the bundle is relocated.
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
 }
