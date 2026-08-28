@@ -82,6 +82,14 @@ pub mod qobject {
         fn delete_recording(self: Pin<&mut RecordingBridge>) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "deleteRecordingsForRange"]
+        fn delete_recordings_for_range(
+            self: Pin<&mut RecordingBridge>,
+            start_secs: f64,
+            end_secs: f64,
+        ) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "processNoiseReduction"]
         fn process_noise_reduction(self: Pin<&mut RecordingBridge>, profile: &QString) -> bool;
 
@@ -450,20 +458,8 @@ impl qobject::RecordingBridge {
             Some(recording) => recording,
             None => return false,
         };
-        let mut leftovers = Vec::new();
-        for path in recording.all_file_paths() {
-            if let Err(error) = std::fs::remove_file(path) {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    leftovers.push(path.to_string());
-                }
-            }
-        }
-        if !leftovers.is_empty() {
-            let message = format!("有 {} 个录音文件未能删除", leftovers.len());
-            return self.as_mut().report_error(
-                "删除录音失败",
-                els_types::AppError::Io(message),
-            );
+        if let Err(error) = remove_recording_files(&recording) {
+            return self.as_mut().report_error("删除录音失败", error);
         }
         if let Err(error) = self.as_mut().rust_mut().manager.delete(&recording) {
             return self.as_mut().report_error("删除录音记录失败", error);
@@ -472,6 +468,55 @@ impl qobject::RecordingBridge {
         self.as_mut().clear_recording();
         self.as_mut()
             .set_status_message(QString::from("录音及降噪版本已删除"));
+        true
+    }
+
+    fn delete_recordings_for_range(
+        mut self: Pin<&mut Self>,
+        start_secs: f64,
+        end_secs: f64,
+    ) -> bool {
+        if self.rust().is_recording || self.rust().is_processing {
+            return false;
+        }
+        let Some(video_id) = self.rust().current_video_id else {
+            return false;
+        };
+        let range = els_types::TimeRange {
+            start: start_secs,
+            end: end_secs,
+        };
+        let mut removed_count = 0;
+
+        loop {
+            let recording = match self.rust().manager.latest_for_range(video_id, range) {
+                Ok(recording) => recording,
+                Err(error) => return self.as_mut().report_error("删除片段录音失败", error),
+            };
+            let Some(recording) = recording else {
+                break;
+            };
+            if let Err(error) = remove_recording_files(&recording) {
+                return self.as_mut().report_error("删除片段录音失败", error);
+            }
+            if let Err(error) = self.as_mut().rust_mut().manager.delete(&recording) {
+                return self.as_mut().report_error("删除片段录音记录失败", error);
+            }
+            removed_count += 1;
+        }
+
+        if self
+            .rust()
+            .session
+            .recording()
+            .is_some_and(|recording| recording.range == range)
+        {
+            self.as_mut().clear_target();
+        }
+        self.as_mut().set_status_message(QString::from(format!(
+            "已删除片段对应的 {} 条录音",
+            removed_count
+        )));
         true
     }
 
@@ -531,6 +576,27 @@ impl qobject::RecordingBridge {
         self.as_mut().start_waveform_task(recording, None);
         self.as_mut().set_status_message(QString::from("正在加载原始录音"));
         true
+    }
+}
+
+fn remove_recording_files(
+    recording: &els_recording_core::Recording,
+) -> els_types::AppResult<()> {
+    let mut leftovers = Vec::new();
+    for path in recording.all_file_paths() {
+        if let Err(error) = std::fs::remove_file(path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                leftovers.push(path.to_string());
+            }
+        }
+    }
+    if leftovers.is_empty() {
+        Ok(())
+    } else {
+        Err(els_types::AppError::Io(format!(
+            "有 {} 个录音文件未能删除",
+            leftovers.len()
+        )))
     }
 }
 

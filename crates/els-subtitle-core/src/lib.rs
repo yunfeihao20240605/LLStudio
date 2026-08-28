@@ -42,10 +42,9 @@ impl SubtitleTrack {
             return None;
         }
 
-        self.cues.iter().position(|cue| {
-            cue.range.start >= range.start - CUE_START_MATCH_TOLERANCE_SECS
-                && cue.range.start < range.end
-        })
+        self.cues
+            .iter()
+            .position(|cue| cue_start_in_range(cue, range))
     }
 
     /// 返回时间点对应的唯一字幕。允许极小的起点误差；字幕重叠时，
@@ -131,6 +130,21 @@ impl SubtitleTrack {
         Ok(())
     }
 
+    pub fn remove_cues_for_range(
+        &mut self,
+        range: els_types::TimeRange,
+    ) -> els_types::AppResult<usize> {
+        if !valid_range(range) {
+            return Err(els_types::AppError::InvalidArgument(
+                "subtitle requires a valid time range".to_string(),
+            ));
+        }
+
+        let original_count = self.cues.len();
+        self.cues.retain(|cue| !cue_start_in_range(cue, range));
+        Ok(original_count - self.cues.len())
+    }
+
     pub fn to_srt(&self) -> String {
         let blocks = self
             .cues
@@ -196,6 +210,10 @@ fn valid_range(range: els_types::TimeRange) -> bool {
         && range.end.is_finite()
         && range.start >= 0.0
         && range.end > range.start
+}
+
+fn cue_start_in_range(cue: &SubtitleCue, range: els_types::TimeRange) -> bool {
+    cue.range.start >= range.start - CUE_START_MATCH_TOLERANCE_SECS && cue.range.start < range.end
 }
 
 fn format_srt_timestamp(seconds: f64) -> String {
@@ -337,6 +355,31 @@ mod tests {
             }),
             None
         );
+    }
+
+    #[test]
+    fn removes_all_cues_that_start_in_a_segment() {
+        let mut track = SubtitleTrack::default();
+        track
+            .load_from_text(
+                "1\n00:00:01,000 --> 00:00:02,000\nBefore\n\n\
+                 2\n00:00:03,000 --> 00:00:04,000\nFirst\n\n\
+                 3\n00:00:05,500 --> 00:00:06,000\nSecond\n\n\
+                 4\n00:00:08,000 --> 00:00:09,000\nAfter",
+            )
+            .expect("load cues");
+
+        let removed = track
+            .remove_cues_for_range(TimeRange {
+                start: 3.0,
+                end: 8.0,
+            })
+            .expect("remove segment cues");
+
+        assert_eq!(removed, 2);
+        assert_eq!(track.cues().len(), 2);
+        assert_eq!(track.cues()[0].original_text, "Before");
+        assert_eq!(track.cues()[1].original_text, "After");
     }
 
     #[test]

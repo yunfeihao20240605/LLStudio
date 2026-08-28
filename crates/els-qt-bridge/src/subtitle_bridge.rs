@@ -58,6 +58,14 @@ pub mod qobject {
         fn delete_cue(self: Pin<&mut SubtitleBridge>, cue_index: i32) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "deleteCuesForRange"]
+        fn delete_cues_for_range(
+            self: Pin<&mut SubtitleBridge>,
+            start_secs: f64,
+            end_secs: f64,
+        ) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "selectCue"]
         fn select_cue(self: Pin<&mut SubtitleBridge>, cue_index: i32) -> bool;
 
@@ -243,6 +251,46 @@ impl qobject::SubtitleBridge {
         self.as_mut().sync_playback_position(playback_position);
         self.as_mut()
             .set_status_message(QString::from("字幕已删除"));
+        true
+    }
+
+    fn delete_cues_for_range(mut self: Pin<&mut Self>, start_secs: f64, end_secs: f64) -> bool {
+        let Some(subtitle_path) = self.rust().subtitle_path.clone() else {
+            return false;
+        };
+        let previous_track = self.rust().track.clone();
+        let removed_count =
+            match self
+                .as_mut()
+                .rust_mut()
+                .track
+                .remove_cues_for_range(els_types::TimeRange {
+                    start: start_secs,
+                    end: end_secs,
+                }) {
+                Ok(count) => count,
+                Err(err) => return self.as_mut().report_error("删除片段字幕失败", err),
+            };
+
+        if removed_count == 0 {
+            self.as_mut()
+                .set_status_message(QString::from("片段范围内没有字幕"));
+            return true;
+        }
+
+        if let Err(err) = self.rust().track.save_srt(&subtitle_path.to_string_lossy()) {
+            self.as_mut().rust_mut().track = previous_track;
+            return self.as_mut().report_error("删除片段字幕失败", err);
+        }
+
+        self.as_mut().refresh_entries();
+        self.as_mut().set_editing_cue(-1);
+        let playback_position = self.rust().playback_position;
+        self.as_mut().sync_playback_position(playback_position);
+        self.as_mut().set_status_message(QString::from(format!(
+            "已删除片段对应的 {} 条字幕",
+            removed_count
+        )));
         true
     }
 
