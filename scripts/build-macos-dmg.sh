@@ -33,14 +33,20 @@ if [[ "$arch" == "x86_64" ]]; then
   if ! brew tap | grep -Fxq "local/ffmpeg8"; then
     brew tap-new --no-git local/ffmpeg8
   fi
-  if ! brew info --json=v2 "$ffmpeg_formula" >/dev/null 2>&1; then
-    brew extract \
-      --version=8.1.2 \
-      --git-revision=c7348004c5876a7cddfa236babd4bf3489f21d87 \
-      ffmpeg \
-      local/ffmpeg8
+  ffmpeg_tap_dir="$(brew --repository local/ffmpeg8)"
+  ffmpeg_formula_file="$ffmpeg_tap_dir/Formula/ffmpeg@8.1.2.rb"
+  if [[ ! -f "$ffmpeg_formula_file" ]]; then
+    mkdir -p "$(dirname "$ffmpeg_formula_file")"
+    curl -fsSL \
+      "https://api.github.com/repos/Homebrew/homebrew-core/contents/Formula/f/ffmpeg.rb?ref=c8d371d10663c637fe24eafcdf6bcd5cd0bec4ea" |
+      python3 -c 'import base64,json,sys; print(base64.b64decode(json.load(sys.stdin)["content"]).decode(), end="")' |
+      sed 's/^class Ffmpeg < Formula$/class FfmpegAT812 < Formula/' > "$ffmpeg_formula_file"
   fi
-  brew install "$ffmpeg_formula"
+  brew trust --formula "$ffmpeg_formula"
+  ffmpeg8_prefix="$(brew --prefix ffmpeg@8.1.2)"
+  if [[ ! -x "$ffmpeg8_prefix/bin/ffmpeg" || ! -x "$ffmpeg8_prefix/bin/ffprobe" ]]; then
+    brew reinstall --formula --build-from-source "$ffmpeg_formula_file"
+  fi
 else
   brew install ffmpeg
 fi
@@ -48,6 +54,7 @@ fi
 qt_prefix="${QT_PREFIX:-$(brew --prefix qt)}"
 ffmpeg_prefix="${FFMPEG_PREFIX:-$(brew --prefix "$ffmpeg_formula")}"
 mpv_prefix="${MPV_PREFIX:-$(brew --prefix mpv)}"
+pkgconf_prefix="$(brew --prefix pkgconf)"
 macdeployqt_bin="${MACDEPLOYQT:-$qt_prefix/bin/macdeployqt}"
 [[ -x "$macdeployqt_bin" ]] || die "macdeployqt not found: $macdeployqt_bin"
 
@@ -56,13 +63,14 @@ export CMAKE_PREFIX_PATH="$qt_prefix"
 export FFMPEG_FORMULA="$ffmpeg_formula"
 export FFMPEG_PREFIX="$ffmpeg_prefix"
 export MPV_PREFIX="$mpv_prefix"
+export PATH="$ffmpeg_prefix/bin:$mpv_prefix/bin:$pkgconf_prefix/bin:$PATH"
 export PKG_CONFIG_PATH="$ffmpeg_prefix/lib/pkgconfig:$mpv_prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export PKG_CONFIG_ALLOW_CROSS=1
 export "PKG_CONFIG_ALLOW_CROSS_${target//-/_}"=1
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
 export CXXFLAGS="-I$qt_prefix/include ${CXXFLAGS:-}"
 
-if ! pkg-config --exists libavutil libmpv; then
+if ! pkg-config --exists libavutil mpv; then
   die "FFmpeg/mpv pkg-config files are unavailable; check PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 fi
 [[ -x "$ffmpeg_prefix/bin/ffmpeg" ]] || die "ffmpeg executable not found"

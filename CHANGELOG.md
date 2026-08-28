@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### 修复 (Bug Fixes)
 - 修复 macOS 从 DMG 启动时录音目录落到只读当前工作目录导致无法创建录音的问题
 - 修复录音文件删除失败时数据库记录先被删除的问题
+- 移除 QML 启动阶段对应用图标资源的依赖，避免 macOS DMG 启动后窗口未显示
 
 ---
 
