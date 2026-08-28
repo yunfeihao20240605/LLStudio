@@ -144,6 +144,32 @@ Rectangle {
         setZoom(minimumZoom)
     }
 
+    function beginZoomEdit() {
+        zoomEditor.text = root.zoomFactor.toFixed(1)
+        zoomEditor.forceActiveFocus()
+        Qt.callLater(function() {
+            if (zoomEditor.activeFocus)
+                zoomEditor.selectAll()
+        })
+    }
+
+    function commitZoomEdit() {
+        var value = Number(zoomEditor.text)
+        if (!isFinite(value)) {
+            cancelZoomEdit()
+            zoomEditor.focus = false
+            return
+        }
+        root.setZoom(root.clamp(value, root.minimumZoom, root.maximumZoom))
+        zoomEditor.text = root.zoomFactor.toFixed(1)
+        zoomEditor.focus = false
+    }
+
+    function cancelZoomEdit() {
+        zoomEditor.text = root.zoomFactor.toFixed(1)
+        zoomEditor.focus = false
+    }
+
     function timeToContentX(seconds) {
         return clamp(seconds / Math.max(0.001, durationSecs()), 0, 1) * waveformContent.width
     }
@@ -259,6 +285,8 @@ Rectangle {
     onZoomFactorChanged: {
         requestWaveformPaint()
         scheduleDetailRequest()
+        if (zoomEditor && !zoomEditor.activeFocus)
+            zoomEditor.text = zoomFactor.toFixed(1)
     }
     onComparisonVisibleChanged: {
         requestWaveformPaint()
@@ -474,11 +502,55 @@ Rectangle {
                 accentBackgroundColor: root.accentBg
             }
 
+            TextInput {
+                id: zoomEditor
+                color: root.textPrimary
+                selectedTextColor: root.textPrimary
+                selectionColor: root.accentBg
+                font.pixelSize: 13
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                Layout.preferredWidth: 52
+                text: root.zoomFactor.toFixed(1)
+                selectByMouse: true
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                validator: DoubleValidator {
+                    bottom: root.minimumZoom
+                    top: root.maximumZoom
+                    decimals: 2
+                }
+
+                Rectangle {
+                    z: -1
+                    anchors.fill: parent
+                    color: root.panelBg
+                    border.color: zoomEditor.activeFocus ? root.accent : root.borderColor
+                    radius: 4
+                }
+
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        root.commitZoomEdit()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Escape) {
+                        root.cancelZoomEdit()
+                        event.accepted = true
+                    }
+                }
+
+                onActiveFocusChanged: {
+                    if (activeFocus)
+                        root.beginZoomEdit()
+                    else
+                        root.commitZoomEdit()
+                }
+            }
+
             Text {
-                text: root.zoomFactor.toFixed(1) + "x"
+                text: "x"
                 color: textSecondary
                 font.pixelSize: 13
-                Layout.preferredWidth: 58
+                Layout.preferredWidth: 10
             }
 
             ThemedToolButton {
