@@ -1149,7 +1149,7 @@ Rectangle {
                     Layout.fillWidth: true
                 }
 
-                Button {
+                ThemedToolButton {
                     visible: root.recordingBridge && root.recordingBridge.hasVideo
                     Layout.preferredWidth: 124
                     enabled: root.recordingBridge
@@ -1163,6 +1163,18 @@ Rectangle {
                              && root.recordingBridge.isProcessing
                              && !root.recordingBridge.isLoadingWaveform
                              ? "处理中" : "●  录音")
+                    panelColor: root.recordingBridge
+                                 && root.recordingBridge.isRecording
+                                 ? root.accentBg : root.panelBg
+                    borderColor: root.recordingBridge
+                                && root.recordingBridge.isRecording
+                                ? root.accent : root.borderColor
+                    textColor: root.recordingBridge
+                               && root.recordingBridge.isRecording
+                               ? root.accent : root.textPrimary
+                    disabledTextColor: root.textSecondary
+                    accentColor: root.accent
+                    accentBackgroundColor: root.accentBg
                     onClicked: {
                         if (root.recordingBridge.isRecording)
                             root.recordingStopRequested()

@@ -28,6 +28,7 @@ Rectangle {
                                                 && subtitleBridge.editingCueIndex >= 0
 
     signal noteNavigationRequested(real startSecs, real endSecs, bool hasRange)
+    signal noteCreationRequested(real startSecs, real endSecs, bool hasRange)
     signal aiSubtitleContextRequested(int cueIndex, real startSecs, real endSecs, string text)
     signal subtitleSaveSucceeded(string message)
 
@@ -464,6 +465,9 @@ Rectangle {
             Layout.fillHeight: true
             visible: root.activeTab === 1
             noteBridge: root.noteBridge
+            canCreateNote: root.noteBridge
+                           && root.noteBridge.hasVideo
+                           && root.selectionIsValid()
             panelBg: root.panelBg
             elevatedBg: root.elevatedBg
             borderColor: root.borderColor
@@ -473,6 +477,14 @@ Rectangle {
             accentBg: root.accentBg
             onNavigationRequested: function(startSecs, endSecs, hasRange) {
                 root.noteNavigationRequested(startSecs, endSecs, hasRange)
+            }
+            onNewNoteRequested: {
+                if (root.noteBridge && root.noteBridge.hasVideo
+                        && root.selectionIsValid())
+                    root.noteCreationRequested(
+                                root.waveformBridge.selectionStart,
+                                root.waveformBridge.selectionEnd,
+                                true)
             }
         }
 

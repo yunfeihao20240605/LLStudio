@@ -460,10 +460,28 @@ ApplicationWindow {
     }
 
     function deleteLearningSegment(index) {
+        if (index < 0 || index >= segmentBridge.segmentCount)
+            return false
+
         var deletingActive = index === segmentBridge.activeIndex
+        var segmentStart = segmentBridge.segmentStartAt(index)
+        var segmentEnd = segmentBridge.segmentEndAt(index)
         trainingController.stopTraining()
-        if (segmentBridge.deleteSegment(index) && deletingActive)
+        if (!segmentBridge.deleteSegment(index))
+            return false
+
+        if (deletingActive)
             waveformBridge.clearSelection()
+        if (!subtitleBridge.deleteCuesForRange(segmentStart, segmentEnd)) {
+            themeBridge.reportError("学习片段已删除，但对应字幕删除失败")
+            return false
+        }
+        if (!recordingBridge.deleteRecordingsForRange(segmentStart, segmentEnd)) {
+            themeBridge.reportError("学习片段已删除，但对应录音删除失败")
+            return false
+        }
+        segmentBridge.refreshRecordingRanges()
+        return true
     }
 
     function createNote(startSecs, endSecs, hasRange) {
@@ -1116,6 +1134,9 @@ ApplicationWindow {
                     noteBridge: noteBridge
                     waveformBridge: waveformBridge
                     aiBridge: aiTutorBridge
+                    onNoteCreationRequested: function(startSecs, endSecs, hasRange) {
+                        root.createNote(startSecs, endSecs, hasRange)
+                    }
                     onNoteNavigationRequested: function(startSecs, endSecs, hasRange) {
                         root.navigateToNote(startSecs, endSecs, hasRange)
                     }

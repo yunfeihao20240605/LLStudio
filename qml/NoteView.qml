@@ -6,6 +6,7 @@ Item {
     id: root
 
     property var noteBridge
+    property bool canCreateNote: false
     property color panelBg: "#ffffff"
     property color elevatedBg: "#fafbfc"
     property color borderColor: "#d0d7de"
@@ -18,6 +19,7 @@ Item {
     property bool previewMode: false
 
     signal navigationRequested(real startSecs, real endSecs, bool hasRange)
+    signal newNoteRequested()
 
     function formatTimestamp(totalSeconds) {
         var totalMillis = Math.max(0, Math.round((totalSeconds || 0) * 1000))
@@ -296,47 +298,70 @@ Item {
                         elide: Text.ElideRight
                     }
 
-                    Rectangle {
-                        Layout.preferredWidth: 104
-                        Layout.preferredHeight: 28
-                        radius: 6
-                        color: "transparent"
-                        border.color: root.borderColor
+                    RowLayout {
+                        Layout.preferredHeight: 30
+                        spacing: 4
 
-                        Row {
-                            anchors.fill: parent
+                        ThemedToolButton {
+                            id: newNoteButton
+                            Layout.preferredWidth: 30
+                            Layout.preferredHeight: 30
+                            text: "+"
+                            font.pixelSize: 16
+                            enabled: root.canCreateNote
+                            panelColor: root.elevatedBg
+                            borderColor: root.borderColor
+                            textColor: root.textPrimary
+                            disabledTextColor: root.textSecondary
+                            accentColor: root.accent
+                            accentBackgroundColor: root.accentBg
+                            onClicked: root.newNoteRequested()
+                            ToolTip.visible: hovered
+                            ToolTip.text: enabled ? "新建当前片段笔记" : "请先选择一个片段"
+                        }
 
-                            Repeater {
-                                model: ["编辑", "预览"]
+                        ThemedToolButton {
+                            id: editButton
+                            Layout.preferredWidth: 30
+                            Layout.preferredHeight: 30
+                            text: "✎"
+                            font.pixelSize: 16
+                            enabled: root.noteBridge
+                                     && root.noteBridge.editingNoteIndex >= 0
+                            panelColor: !root.previewMode
+                                         ? root.accentBg : root.elevatedBg
+                            borderColor: !root.previewMode
+                                          ? root.accent : root.borderColor
+                            textColor: !root.previewMode
+                                       ? root.accent : root.textSecondary
+                            disabledTextColor: root.textSecondary
+                            accentColor: root.accent
+                            accentBackgroundColor: root.accentBg
+                            onClicked: root.setPreviewMode(false)
+                            ToolTip.visible: hovered
+                            ToolTip.text: "编辑笔记"
+                        }
 
-                                delegate: Rectangle {
-                                    required property int index
-                                    required property string modelData
-                                    width: 52
-                                    height: 28
-                                    radius: 5
-                                    color: root.previewMode === (index === 1)
-                                           ? root.accentBg : "transparent"
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: modelData
-                                        color: root.previewMode === (index === 1)
-                                               ? root.accent : root.textSecondary
-                                        font.pixelSize: 12
-                                        font.bold: root.previewMode === (index === 1)
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        enabled: root.noteBridge
-                                                 && root.noteBridge.editingNoteIndex >= 0
-                                        cursorShape: enabled ? Qt.PointingHandCursor
-                                                             : Qt.ArrowCursor
-                                        onClicked: root.setPreviewMode(index === 1)
-                                    }
-                                }
-                            }
+                        ThemedToolButton {
+                            id: previewButton
+                            Layout.preferredWidth: 30
+                            Layout.preferredHeight: 30
+                            text: "◉"
+                            font.pixelSize: 16
+                            enabled: root.noteBridge
+                                     && root.noteBridge.editingNoteIndex >= 0
+                            panelColor: root.previewMode
+                                         ? root.accentBg : root.elevatedBg
+                            borderColor: root.previewMode
+                                          ? root.accent : root.borderColor
+                            textColor: root.previewMode
+                                       ? root.accent : root.textSecondary
+                            disabledTextColor: root.textSecondary
+                            accentColor: root.accent
+                            accentBackgroundColor: root.accentBg
+                            onClicked: root.setPreviewMode(true)
+                            ToolTip.visible: hovered
+                            ToolTip.text: "预览笔记"
                         }
                     }
                 }

@@ -142,9 +142,14 @@ Rectangle {
         }
         RowLayout {
             Layout.fillWidth: true
-            TextField {
+            ThemedTextField {
                 id: input
                 Layout.fillWidth: true
+                panelColor: root.elevatedBg
+                borderColor: root.borderColor
+                textColor: root.textPrimary
+                placeholderColor: root.textSecondary
+                accentColor: root.accent
                 placeholderText: "输入问题，或输入 / 选择快捷问题…"
                 onTextChanged: root.updateQuickQuestions()
                 onAccepted: {
@@ -172,7 +177,17 @@ Rectangle {
                     }
                 }
             }
-            Button { text: root.aiBridge && root.aiBridge.isSending ? "请求中" : "发送"; enabled: root.aiBridge && !root.aiBridge.isSending; onClicked: send() }
+            ThemedToolButton {
+                text: root.aiBridge && root.aiBridge.isSending ? "请求中" : "发送"
+                enabled: root.aiBridge && !root.aiBridge.isSending
+                panelColor: root.elevatedBg
+                borderColor: root.borderColor
+                textColor: root.textPrimary
+                disabledTextColor: root.textSecondary
+                accentColor: root.accent
+                accentBackgroundColor: root.accentBg
+                onClicked: root.send()
+            }
         }
         Text { Layout.fillWidth: true; text: root.aiBridge ? root.aiBridge.errorMessage : ""; color: "#c03d3d"; wrapMode: Text.Wrap; visible: text.length > 0 }
     }
