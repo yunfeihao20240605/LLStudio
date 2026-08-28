@@ -494,7 +494,6 @@ ApplicationWindow {
     minimumWidth: 1220
     minimumHeight: 760
     title: "LLStudio"
-    icon: "qrc:/qt/qml/com/yfhao/els/app/app-icon.png"
 
     onClosing: root.savePlaybackProgress()
 
