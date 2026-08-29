@@ -509,6 +509,7 @@ ApplicationWindow {
     width: 1440
     height: 920
     visible: true
+    visibility: Window.Maximized
     minimumWidth: 1220
     minimumHeight: 760
     title: "LLStudio"
