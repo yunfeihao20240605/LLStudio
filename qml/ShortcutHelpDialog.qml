@@ -13,13 +13,13 @@ Dialog {
     property color textPrimary: "#1f2329"
     property color textSecondary: "#6b7280"
     property color accent: "#2f6fed"
+    property color accentBg: "#eaf1fe"
 
     title: "快捷键"
     modal: true
     width: 510
     height: 430
     closePolicy: Popup.CloseOnEscape
-    standardButtons: Dialog.Close
 
     background: Rectangle {
         color: root.panelBg
@@ -41,6 +41,28 @@ Dialog {
             color: root.textPrimary
             font.pixelSize: 17
             font.bold: true
+        }
+    }
+
+    footer: Rectangle {
+        implicitHeight: 58
+        color: root.elevatedBg
+        border.color: root.borderColor
+        border.width: 1
+
+        ThemedToolButton {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.rightMargin: 16
+            width: 112
+            text: "关闭"
+            panelColor: root.panelBg
+            borderColor: root.borderColor
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            accentColor: root.accent
+            accentBackgroundColor: root.accentBg
+            onClicked: root.close()
         }
     }
 

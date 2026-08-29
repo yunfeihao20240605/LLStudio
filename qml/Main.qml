@@ -977,7 +977,8 @@ ApplicationWindow {
                 VideoPlaybackPane {
                     id: videoPlaybackPane
                     SplitView.minimumHeight: 340
-                    SplitView.preferredHeight: 430
+                    SplitView.preferredHeight: Math.max(
+                                340, Math.round(playbackWorkspace.height * 0.6))
                     SplitView.fillHeight: root.videoFullScreen
                     fullScreenMode: root.videoFullScreen
                     darkTheme: theme.darkAppearance
@@ -1036,6 +1037,7 @@ ApplicationWindow {
                     visible: !root.videoFullScreen
                     SplitView.minimumHeight: 240
                     SplitView.preferredHeight: recordingBridge.hasRecording ? 380 : 290
+                    SplitView.fillHeight: !root.videoFullScreen
                     subtitleBridge: subtitleBridge
                     waveformBridge: waveformBridge
                     recordingBridge: recordingBridge
@@ -1239,6 +1241,7 @@ ApplicationWindow {
         textPrimary: theme.textPrimary
         textSecondary: theme.textSecondary
         accent: theme.accent
+        accentBg: theme.accentBg
     }
 
     Dialog {

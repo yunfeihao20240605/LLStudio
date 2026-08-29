@@ -382,6 +382,10 @@ Item {
                                                      : "选择一条笔记"
                             wrapMode: TextEdit.Wrap
                             selectByMouse: true
+                            color: enabled ? root.textPrimary : root.textSecondary
+                            placeholderTextColor: root.textSecondary
+                            selectionColor: root.accent
+                            selectedTextColor: "#ffffff"
                             background: null
 
                             onTextChanged: {
