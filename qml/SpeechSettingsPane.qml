@@ -13,6 +13,50 @@ ScrollView {
     property color elevatedBg: "#fafbfc"
     property color borderColor: "#d0d7de"
     property color accentBg: "#eaf1fe"
+    property var engineModelLabels: [
+        "中文通用",
+        "中英粤",
+        "中文医疗",
+        "英语",
+        "粤语",
+        "日语",
+        "韩语",
+        "越南语",
+        "马来语",
+        "印度尼西亚语",
+        "菲律宾语",
+        "泰语",
+        "葡萄牙语",
+        "土耳其语",
+        "阿拉伯语",
+        "西班牙语",
+        "印地语",
+        "法语",
+        "德语",
+        "多方言"
+    ]
+    property var engineModelValues: [
+        "16k_zh",
+        "16k_zh-PY",
+        "16k_zh_medical",
+        "16k_en",
+        "16k_yue",
+        "16k_ja",
+        "16k_ko",
+        "16k_vi",
+        "16k_ms",
+        "16k_id",
+        "16k_fil",
+        "16k_th",
+        "16k_pt",
+        "16k_tr",
+        "16k_ar",
+        "16k_es",
+        "16k_hi",
+        "16k_fr",
+        "16k_de",
+        "16k_zh_dialect"
+    ]
 
     clip: true
     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -29,7 +73,13 @@ ScrollView {
         secretId.text = settingsBridge.secretId
         secretKey.text = settingsBridge.secretKey
         region.text = settingsBridge.region
-        engineModel.text = settingsBridge.engineModel
+        var configuredEngineModel = settingsBridge.engineModel
+        if (configuredEngineModel === "16k_zh_en")
+            configuredEngineModel = "16k_zh-PY"
+        var configuredIndex = root.engineModelValues.indexOf(configuredEngineModel)
+        engineModel.currentIndex = configuredIndex >= 0
+                ? configuredIndex
+                : root.engineModelValues.indexOf("16k_en")
     }
 
     function save() {
@@ -45,7 +95,8 @@ ScrollView {
         settingsBridge.secretId = secretId.text.trim()
         settingsBridge.secretKey = secretKey.text.trim()
         settingsBridge.region = region.text.trim()
-        settingsBridge.engineModel = engineModel.text.trim()
+        var selectedEngineModel = root.engineModelValues[engineModel.currentIndex]
+        settingsBridge.engineModel = selectedEngineModel || "16k_en"
         return settingsBridge.saveConfig()
     }
 
@@ -190,15 +241,17 @@ ScrollView {
             ColumnLayout {
                 Layout.fillWidth: true
                 Label { text: "语言模型"; color: root.textPrimary }
-                ThemedTextField {
+                ThemedComboBox {
                     id: engineModel
                     Layout.fillWidth: true
-                    placeholderText: "16k_en"
+                    model: root.engineModelLabels
                     panelColor: root.panelBg
+                    elevatedColor: root.elevatedBg
                     borderColor: root.borderColor
                     textColor: root.textPrimary
-                    placeholderColor: root.textSecondary
+                    disabledTextColor: root.textSecondary
                     accentColor: root.accent
+                    accentBackgroundColor: root.accentBg
                 }
             }
         }

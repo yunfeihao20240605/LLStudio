@@ -16,6 +16,28 @@ use tungstenite::{connect, Message};
 use url::Url;
 
 pub const PROVIDER_KIND: &str = "tencent-asr";
+pub const SUPPORTED_ENGINE_MODELS: &[&str] = &[
+    "16k_zh",
+    "16k_zh-PY",
+    "16k_zh_medical",
+    "16k_en",
+    "16k_yue",
+    "16k_ja",
+    "16k_ko",
+    "16k_vi",
+    "16k_ms",
+    "16k_id",
+    "16k_fil",
+    "16k_th",
+    "16k_pt",
+    "16k_tr",
+    "16k_ar",
+    "16k_es",
+    "16k_hi",
+    "16k_fr",
+    "16k_de",
+    "16k_zh_dialect",
+];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +72,10 @@ impl TencentAsrConfig {
         self.secret_id = self.secret_id.trim().to_string();
         self.secret_key = self.secret_key.trim().to_string();
         self.region = self.region.trim().to_string();
-        self.engine_model = self.engine_model.trim().to_string();
+        self.engine_model = match self.engine_model.trim() {
+            "16k_zh_en" => "16k_zh-PY".to_string(),
+            value => value.to_string(),
+        };
         self
     }
 
@@ -63,6 +88,12 @@ impl TencentAsrConfig {
             if value.trim().is_empty() {
                 return Err(SpeechError::Configuration(format!("{name} 不能为空")));
             }
+        }
+        if !SUPPORTED_ENGINE_MODELS.contains(&self.engine_model.as_str()) {
+            return Err(SpeechError::Configuration(format!(
+                "不支持的语言模型：{}",
+                self.engine_model
+            )));
         }
         if !self.secret_id.trim().starts_with("AKID") {
             return Err(SpeechError::Configuration(
@@ -798,6 +829,20 @@ mod tests {
         assert_eq!(normalized.secret_key, "key123");
         assert_eq!(normalized.app_id, "123456");
         assert!(normalized.validate().is_ok());
+
+        for engine_model in SUPPORTED_ENGINE_MODELS {
+            let mut supported = normalized.clone();
+            supported.engine_model = (*engine_model).to_string();
+            assert!(supported.validate().is_ok(), "{engine_model}");
+        }
+
+        let mut legacy = normalized.clone();
+        legacy.engine_model = " 16k_zh_en ".into();
+        assert_eq!(legacy.normalized().engine_model, "16k_zh-PY");
+
+        let mut unsupported = normalized.clone();
+        unsupported.engine_model = "custom_model".into();
+        assert!(unsupported.validate().is_err());
 
         let mut quoted = normalized;
         quoted.secret_key = "\"key123".into();
