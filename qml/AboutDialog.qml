@@ -62,7 +62,7 @@ Dialog {
 
             Label {
                 Layout.fillWidth: true
-                text: "Version " + (Qt.application.version || "0.2.0")
+                text: "Version " + (Qt.application.version || "0.3.0")
                 color: root.textSecondary
                 font.pixelSize: 14
                 font.bold: true
@@ -72,10 +72,10 @@ Dialog {
             Label {
                 Layout.fillWidth: true
                 Layout.preferredHeight: implicitHeight
-                text: "以兴趣为引，以 AI 为伴，\n随时随地享受个性化学习"
+                text: "以兴趣为引，以 AI 为伴，随时随地享受个性化学习"
                 color: root.textSecondary
                 font.pixelSize: 13
-                wrapMode: Text.WordWrap
+                wrapMode: Text.NoWrap
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
