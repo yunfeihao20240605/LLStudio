@@ -28,7 +28,7 @@ Dialog {
     }
 
     contentItem: Rectangle {
-        color: root.elevatedBg
+        color: root.panelBg
 
         ColumnLayout {
             anchors.fill: parent
