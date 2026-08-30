@@ -196,7 +196,68 @@ Rectangle {
                : "编辑片段标记"
         modal: true
         implicitWidth: 300
-        standardButtons: Dialog.Ok | Dialog.Cancel
+        closePolicy: Popup.CloseOnEscape
+
+        background: Rectangle {
+            color: root.panelBg
+            border.color: root.borderColor
+            border.width: 1
+            radius: 12
+        }
+
+        header: Rectangle {
+            implicitHeight: 54
+            color: root.elevatedBg
+            radius: 12
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 18
+                anchors.verticalCenter: parent.verticalCenter
+                text: markerDialog.title
+                color: root.textPrimary
+                font.pixelSize: 17
+                font.bold: true
+            }
+        }
+
+        footer: Rectangle {
+            implicitHeight: 58
+            color: root.elevatedBg
+            border.color: root.borderColor
+            border.width: 1
+
+            Row {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.rightMargin: 16
+                spacing: 8
+
+                ThemedToolButton {
+                    width: 78
+                    text: "取消"
+                    panelColor: root.panelBg
+                    borderColor: root.borderColor
+                    textColor: root.textPrimary
+                    disabledTextColor: root.textSecondary
+                    accentColor: root.accent
+                    accentBackgroundColor: root.accentBg
+                    onClicked: markerDialog.reject()
+                }
+
+                ThemedToolButton {
+                    width: 78
+                    text: "确定"
+                    panelColor: root.accentBg
+                    borderColor: root.accent
+                    textColor: root.accent
+                    disabledTextColor: root.textSecondary
+                    accentColor: root.accent
+                    accentBackgroundColor: root.accentBg
+                    onClicked: markerDialog.accept()
+                }
+            }
+        }
 
         onOpened: markerTextField.forceActiveFocus()
         onAccepted: {
@@ -207,8 +268,13 @@ Rectangle {
         }
         onRejected: root.markerEditingIndex = -1
 
-        contentItem: TextField {
+        contentItem: ThemedTextField {
             id: markerTextField
+            panelColor: root.panelBg
+            borderColor: root.borderColor
+            textColor: root.textPrimary
+            placeholderColor: root.textSecondary
+            accentColor: root.accent
             placeholderText: "例如：场景1"
             maximumLength: 80
             selectByMouse: true
@@ -316,8 +382,11 @@ Rectangle {
                     return root.segmentBridge ? root.segmentBridge.segmentLabelAt(index) : ""
                 }
                 readonly property bool selected: root.isSegmentSelected(index)
-                readonly property bool hasRecording: root.segmentBridge
-                                                     && root.segmentBridge.segmentHasRecordingAt(index)
+                readonly property bool hasRecording: {
+                    const _revision = bridgeRevision
+                    return root.segmentBridge
+                            && root.segmentBridge.segmentHasRecordingAt(index)
+                }
 
                 width: ListView.view.width
                 height: 68
@@ -429,19 +498,30 @@ Rectangle {
                     }
                 }
 
-                Menu {
+                ThemedMenu {
                     id: segmentContextMenu
+                    panelColor: root.panelBg
+                    borderColor: root.borderColor
+                    textColor: root.textPrimary
+                    disabledTextColor: root.textSecondary
+                    hoverColor: root.accentBg
 
-                    MenuItem {
+                    ThemedMenuItem {
+                        textColor: root.textPrimary
+                        disabledTextColor: root.textSecondary
+                        hoverColor: root.accentBg
                         text: "为该片段添加笔记"
                         onTriggered: root.noteCreationRequested(
                                          segmentDelegate.startSecs,
                                          segmentDelegate.endSecs)
                     }
 
-                    MenuSeparator {}
+                    ThemedMenuSeparator { separatorColor: root.borderColor }
 
-                    MenuItem {
+                    ThemedMenuItem {
+                        textColor: root.textPrimary
+                        disabledTextColor: root.textSecondary
+                        hoverColor: root.accentBg
                         text: segmentDelegate.marker.length > 0
                               ? "播放同标记片段：“" + segmentDelegate.marker + "”"
                               : "播放同标记片段"
@@ -449,7 +529,12 @@ Rectangle {
                         onTriggered: root.labelPlaybackRequested(segmentDelegate.index)
                     }
 
-                    Menu {
+                    ThemedMenu {
+                        panelColor: root.panelBg
+                        borderColor: root.borderColor
+                        textColor: root.textPrimary
+                        disabledTextColor: root.textSecondary
+                        hoverColor: root.accentBg
                         title: root.selectionTargetsFor(segmentDelegate.index).length > 1
                                ? "设置标记（"
                                  + root.selectionTargetsFor(segmentDelegate.index).length
@@ -460,13 +545,16 @@ Rectangle {
                             model: root.segmentBridge
                                    ? root.segmentBridge.recentLabelCount : 0
 
-                            delegate: MenuItem {
+                            delegate: ThemedMenuItem {
                                 required property int index
                                 property string candidateLabel: {
                                     const _revision = segmentDelegate.bridgeRevision
                                     return root.segmentBridge
                                             ? root.segmentBridge.recentLabelAt(index) : ""
                                 }
+                                textColor: root.textPrimary
+                                disabledTextColor: root.textSecondary
+                                hoverColor: root.accentBg
                                 text: index === 0
                                       ? candidateLabel + "（最近使用）"
                                       : candidateLabel
@@ -481,19 +569,26 @@ Rectangle {
                             }
                         }
 
-                        MenuSeparator {
+                        ThemedMenuSeparator {
+                            separatorColor: root.borderColor
                             visible: root.segmentBridge
                                      && root.segmentBridge.recentLabelCount > 0
                         }
 
-                        MenuItem {
+                        ThemedMenuItem {
+                            textColor: root.textPrimary
+                            disabledTextColor: root.textSecondary
+                            hoverColor: root.accentBg
                             text: segmentDelegate.marker.length > 0
                                   ? "编辑当前标记…" : "新建标记…"
                             onTriggered: root.editSegmentMarker(segmentDelegate.index)
                         }
                     }
 
-                    MenuItem {
+                    ThemedMenuItem {
+                        textColor: root.textPrimary
+                        disabledTextColor: root.textSecondary
+                        hoverColor: root.accentBg
                         text: "清除标记"
                         enabled: segmentDelegate.marker.length > 0
                                  || root.selectedIndices.length > 1

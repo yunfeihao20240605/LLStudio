@@ -1,10 +1,12 @@
 //! 视频时间笔记与 QML 的薄适配层。
 
+use crate::subtitle_bridge::sibling_subtitle_path;
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
-use els_note_core::NoteManager;
-use std::path::Path;
+use els_note_core::{Note, NoteManager};
+use els_subtitle_core::{SubtitleCue, SubtitleProvider, SubtitleTrack};
+use std::path::{Path, PathBuf};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -75,6 +77,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "notePreviewAt"]
         fn note_preview_at(&self, index: i32) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "exportMarkdown"]
+        fn export_markdown(self: Pin<&mut NoteBridge>, output_path: &QString) -> bool;
     }
 }
 
@@ -93,6 +99,7 @@ pub struct NoteBridgeRust {
     status_message: QString,
     manager: NotesManager,
     current_video_id: Option<i64>,
+    current_video_path: Option<PathBuf>,
     summaries: Vec<els_note_core::NoteSummary>,
 }
 
@@ -111,6 +118,7 @@ impl Default for NoteBridgeRust {
             status_message: QString::from("请先加载视频"),
             manager: NotesManager::new(els_storage::SqliteNoteRepository::default()),
             current_video_id: None,
+            current_video_path: None,
             summaries: Vec::new(),
         }
     }
@@ -143,6 +151,7 @@ impl qobject::NoteBridge {
             Err(err) => return self.as_mut().report_error("读取笔记失败", err),
         };
         self.as_mut().rust_mut().current_video_id = Some(video_id);
+        self.as_mut().rust_mut().current_video_path = Some(PathBuf::from(&path));
         self.as_mut().rust_mut().summaries = summaries;
         self.as_mut().set_has_video(true);
         self.as_mut().refresh_summary_properties();
@@ -299,6 +308,63 @@ impl qobject::NoteBridge {
             .map(|summary| QString::from(&summary.preview))
             .unwrap_or_else(|| QString::from(""))
     }
+
+    fn export_markdown(mut self: Pin<&mut Self>, output_path: &QString) -> bool {
+        let (video_id, video_path, summaries) = match (
+            self.rust().current_video_id,
+            self.rust().current_video_path.clone(),
+        ) {
+            (Some(video_id), Some(video_path)) => {
+                (video_id, video_path, self.rust().summaries.clone())
+            }
+            _ => {
+                return self.as_mut().report_error(
+                    "导出笔记失败",
+                    els_types::AppError::InvalidArgument("请先加载视频".to_string()),
+                )
+            }
+        };
+        if summaries.is_empty() {
+            return self.as_mut().report_error(
+                "导出笔记失败",
+                els_types::AppError::InvalidArgument("没有可导出的笔记".to_string()),
+            );
+        }
+
+        let output_path = match selected_markdown_path(output_path) {
+            Ok(path) => path,
+            Err(err) => return self.as_mut().report_error("导出笔记失败", err),
+        };
+
+        let mut subtitle_track = SubtitleTrack::default();
+        if let Some(subtitle_path) = sibling_subtitle_path(&video_path.to_string_lossy()) {
+            if let Err(err) = subtitle_track.load(&subtitle_path.to_string_lossy()) {
+                return self.as_mut().report_error("导出笔记失败", err);
+            }
+        }
+
+        let mut notes = Vec::with_capacity(summaries.len());
+        for summary in &summaries {
+            let note = match self.rust().manager.load_note(summary.id, video_id) {
+                Ok(note) => note,
+                Err(err) => return self.as_mut().report_error("导出笔记失败", err),
+            };
+            notes.push(note);
+        }
+        let content = render_markdown(&notes, subtitle_track.cues());
+        if let Err(err) = std::fs::write(&output_path, content) {
+            return self.as_mut().report_error(
+                "导出笔记失败",
+                els_types::AppError::Io(format!("无法写入 {}：{}", output_path.display(), err)),
+            );
+        }
+
+        self.as_mut().set_status_message(QString::from(format!(
+            "笔记已导出：{}",
+            output_path.display()
+        )));
+        true
+    }
 }
 
 impl qobject::NoteBridge {
@@ -369,6 +435,7 @@ impl qobject::NoteBridge {
 
     fn clear_video(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().current_video_id = None;
+        self.as_mut().rust_mut().current_video_path = None;
         self.as_mut().rust_mut().summaries.clear();
         self.as_mut().set_has_video(false);
         self.as_mut().refresh_summary_properties();
@@ -383,5 +450,106 @@ impl qobject::NoteBridge {
         eprintln!("{message}");
         self.as_mut().set_status_message(QString::from(&message));
         false
+    }
+}
+
+fn selected_markdown_path(output_path: &QString) -> els_types::AppResult<PathBuf> {
+    let requested = output_path.to_string();
+    let requested = requested.trim();
+    if requested.is_empty() {
+        return Err(els_types::AppError::InvalidArgument(
+            "请选择 Markdown 文件保存位置".to_string(),
+        ));
+    }
+
+    let mut path = PathBuf::from(requested);
+    if path.extension().is_none() {
+        path.set_extension("md");
+    }
+    Ok(path)
+}
+
+fn render_markdown(notes: &[Note], cues: &[SubtitleCue]) -> String {
+    let blocks = notes
+        .iter()
+        .map(|note| {
+            let time_label = match note.end_time {
+                Some(end) => format!(
+                    "{}-{}",
+                    format_markdown_timestamp(note.start_time),
+                    format_markdown_timestamp(end)
+                ),
+                None => format_markdown_timestamp(note.start_time),
+            };
+            let dialogue = dialogue_for_note(note, cues);
+            format!(
+                "## 时间点：{}\n### 对白：\n{}\n###笔记：\n{}\n---",
+                time_label, dialogue, &note.content
+            )
+        })
+        .collect::<Vec<_>>();
+
+    if blocks.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", blocks.join("\n"))
+    }
+}
+
+fn dialogue_for_note(note: &Note, cues: &[SubtitleCue]) -> String {
+    cues.iter()
+        .filter(|cue| match note.end_time {
+            Some(end) => cue.range.start < end && cue.range.end > note.start_time,
+            None => cue.range.start <= note.start_time && note.start_time < cue.range.end,
+        })
+        .map(|cue| cue.original_text.trim())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_markdown_timestamp(seconds: f64) -> String {
+    let total_seconds = if seconds.is_finite() && seconds > 0.0 {
+        seconds.round() as u64
+    } else {
+        0
+    };
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_markdown;
+    use els_note_core::Note;
+    use els_subtitle_core::SubtitleCue;
+    use els_types::TimeRange;
+
+    #[test]
+    fn render_markdown_includes_time_dialogue_and_full_note_content() {
+        let note = Note {
+            id: 1,
+            video_id: 2,
+            start_time: 251.0,
+            end_time: Some(252.0),
+            content: "to作为功能词的时候，弱读为/tə/".to_string(),
+            created_at: 0,
+            updated_at: 0,
+        };
+        let cues = vec![SubtitleCue {
+            range: TimeRange {
+                start: 250.5,
+                end: 252.5,
+            },
+            original_text: "Not to mention a legend.".to_string(),
+            translated_text: None,
+        }];
+
+        assert_eq!(
+            render_markdown(&[note], &cues),
+            "## 时间点：00:04:11-00:04:12\n### 对白：\nNot to mention a legend.\n###笔记：\nto作为功能词的时候，弱读为/tə/\n---\n"
+        );
     }
 }

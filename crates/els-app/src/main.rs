@@ -6,7 +6,7 @@
 //! trait，不知道具体实现是什么。
 
 use cxx_qt::casting::Upcast;
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQmlEngine, QUrl};
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQmlEngine, QUrl, QString};
 use std::pin::Pin;
 
 fn main() {
@@ -17,6 +17,11 @@ fn main() {
     els_qt_bridge::mpv_video_item::register_qml_type();
 
     let mut app = QGuiApplication::new();
+    if let Some(mut app) = app.as_mut() {
+        app.as_mut().set_application_name(&QString::from("LLStudio"));
+        app.as_mut()
+            .set_application_version(&QString::from(env!("CARGO_PKG_VERSION")));
+    }
     let mut engine = QQmlApplicationEngine::new();
     let main_qml = QUrl::from("qrc:/qt/qml/com/yfhao/els/app/qml/Main.qml");
 

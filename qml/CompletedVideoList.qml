@@ -99,9 +99,18 @@ Item {
                     }
                 }
 
-                Menu {
+                ThemedMenu {
                     id: ungroupedVideoMenu
-                    MenuItem {
+                    panelColor: root.elevatedBg
+                    borderColor: root.borderColor
+                    textColor: root.textPrimary
+                    disabledTextColor: root.textSecondary
+                    hoverColor: root.accentBg
+
+                    ThemedMenuItem {
+                        textColor: root.textPrimary
+                        disabledTextColor: root.textSecondary
+                        hoverColor: root.accentBg
                         text: "移回正在学习"
                         onTriggered: root.restoreRequested(
                                          ungroupedVideoDelegate.videoPath)
@@ -228,9 +237,18 @@ Item {
                             }
                         }
 
-                        Menu {
+                        ThemedMenu {
                             id: groupedVideoMenu
-                            MenuItem {
+                            panelColor: root.elevatedBg
+                            borderColor: root.borderColor
+                            textColor: root.textPrimary
+                            disabledTextColor: root.textSecondary
+                            hoverColor: root.accentBg
+
+                            ThemedMenuItem {
+                                textColor: root.textPrimary
+                                disabledTextColor: root.textSecondary
+                                hoverColor: root.accentBg
                                 text: "移回正在学习"
                                 onTriggered: root.restoreRequested(
                                                  groupedVideoDelegate.videoPath)

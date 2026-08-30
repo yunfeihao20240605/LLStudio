@@ -14,6 +14,7 @@ Rectangle {
     property color accentBg: "#eaf1fe"
     property var subtitleBridge
     property var noteBridge
+    property string videoPath: ""
     property var waveformBridge
     property var aiBridge
     property int activeTab: 0
@@ -29,6 +30,8 @@ Rectangle {
 
     signal noteNavigationRequested(real startSecs, real endSecs, bool hasRange)
     signal noteCreationRequested(real startSecs, real endSecs, bool hasRange)
+    signal noteExportSucceeded(string message)
+    signal noteExportFailed(string message)
     signal aiSubtitleContextRequested(int cueIndex, real startSecs, real endSecs, string text)
     signal subtitleSaveSucceeded(string message)
 
@@ -124,8 +127,10 @@ Rectangle {
     }
 
     function syncAiContextFromEditingCue() {
-        if (!subtitleBridge || subtitleBridge.editingCueIndex < 0)
+        if (!subtitleBridge || subtitleBridge.editingCueIndex < 0) {
+            root.aiSubtitleContextRequested(-1, 0, 0, "")
             return
+        }
         for (var i = 0; i < subtitleEntries.length; ++i) {
             var cue = subtitleEntries[i]
             if (cue.index === subtitleBridge.editingCueIndex) {
@@ -281,7 +286,11 @@ Rectangle {
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: root.activeTab = index
+                        onClicked: {
+                            root.activeTab = index
+                            if (index === 2)
+                                root.syncAiContextFromEditingCue()
+                        }
                     }
                 }
             }
@@ -465,6 +474,7 @@ Rectangle {
             Layout.fillHeight: true
             visible: root.activeTab === 1
             noteBridge: root.noteBridge
+            videoPath: root.videoPath
             canCreateNote: root.noteBridge
                            && root.noteBridge.hasVideo
                            && root.selectionIsValid()
@@ -477,6 +487,12 @@ Rectangle {
             accentBg: root.accentBg
             onNavigationRequested: function(startSecs, endSecs, hasRange) {
                 root.noteNavigationRequested(startSecs, endSecs, hasRange)
+            }
+            onNoteExportSucceeded: function(message) {
+                root.noteExportSucceeded(message)
+            }
+            onNoteExportFailed: function(message) {
+                root.noteExportFailed(message)
             }
             onNewNoteRequested: {
                 if (root.noteBridge && root.noteBridge.hasVideo

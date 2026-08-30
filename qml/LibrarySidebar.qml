@@ -421,21 +421,39 @@ Rectangle {
                                                 }
                                             }
 
-                                            Menu {
+                                            ThemedMenu {
                                                 id: directVideoMenu
+                                                panelColor: root.elevatedBg
+                                                borderColor: root.borderColor
+                                                textColor: root.textPrimary
+                                                disabledTextColor: root.textSecondary
+                                                hoverColor: root.accentBg
 
-                                                MenuItem {
+                                                ThemedMenuItem {
+                                                    textColor: root.textPrimary
+                                                    disabledTextColor: root.textSecondary
+                                                    hoverColor: root.accentBg
                                                     text: "标记为已完成"
                                                     onTriggered: root.markVideoCompleted(
                                                                      directVideoDelegate.videoPath)
                                                 }
 
-                                                MenuSeparator {}
+                                                ThemedMenuSeparator {
+                                                    separatorColor: root.borderColor
+                                                }
 
-                                                Menu {
+                                                ThemedMenu {
+                                                    panelColor: root.elevatedBg
+                                                    borderColor: root.borderColor
+                                                    textColor: root.textPrimary
+                                                    disabledTextColor: root.textSecondary
+                                                    hoverColor: root.accentBg
                                                     title: "移动到"
 
-                                                    MenuItem {
+                                                    ThemedMenuItem {
+                                                        textColor: root.textPrimary
+                                                        disabledTextColor: root.textSecondary
+                                                        hoverColor: root.accentBg
                                                         text: "暂无自定义列表"
                                                         enabled: false
                                                         visible: !root.libraryBridge
@@ -446,8 +464,11 @@ Rectangle {
                                                         model: root.libraryBridge
                                                                ? root.libraryBridge.listCount : 0
 
-                                                        delegate: MenuItem {
+                                                        delegate: ThemedMenuItem {
                                                             property int targetListIndex: index
+                                                            textColor: root.textPrimary
+                                                            disabledTextColor: root.textSecondary
+                                                            hoverColor: root.accentBg
                                                             text: {
                                                                 root.libraryBridge.revision
                                                                 return root.libraryBridge.listNameAt(
@@ -543,9 +564,18 @@ Rectangle {
                                                     }
                                                 }
 
-                                                Menu {
+                                                ThemedMenu {
                                                     id: customListMenu
-                                                    MenuItem {
+                                                    panelColor: root.elevatedBg
+                                                    borderColor: root.borderColor
+                                                    textColor: root.textPrimary
+                                                    disabledTextColor: root.textSecondary
+                                                    hoverColor: root.accentBg
+
+                                                    ThemedMenuItem {
+                                                        textColor: root.textPrimary
+                                                        disabledTextColor: root.textSecondary
+                                                        hoverColor: root.accentBg
                                                         text: "删除列表"
                                                         onTriggered: root.libraryBridge.deleteList(
                                                                          customListDelegate.listIndex)
@@ -658,35 +688,58 @@ Rectangle {
                                                         }
                                                     }
 
-                                                    Menu {
+                                                    ThemedMenu {
                                                         id: groupedVideoMenu
+                                                        panelColor: root.elevatedBg
+                                                        borderColor: root.borderColor
+                                                        textColor: root.textPrimary
+                                                        disabledTextColor: root.textSecondary
+                                                        hoverColor: root.accentBg
 
-                                                        MenuItem {
+                                                        ThemedMenuItem {
+                                                            textColor: root.textPrimary
+                                                            disabledTextColor: root.textSecondary
+                                                            hoverColor: root.accentBg
                                                             text: "标记为已完成"
                                                             onTriggered: root.markVideoCompleted(
                                                                              groupedVideoDelegate.videoPath)
                                                         }
 
-                                                        MenuSeparator {}
+                                                        ThemedMenuSeparator {
+                                                            separatorColor: root.borderColor
+                                                        }
 
-                                                        Menu {
+                                                        ThemedMenu {
+                                                            panelColor: root.elevatedBg
+                                                            borderColor: root.borderColor
+                                                            textColor: root.textPrimary
+                                                            disabledTextColor: root.textSecondary
+                                                            hoverColor: root.accentBg
                                                             title: "移动到"
 
-                                                            MenuItem {
+                                                            ThemedMenuItem {
+                                                                textColor: root.textPrimary
+                                                                disabledTextColor: root.textSecondary
+                                                                hoverColor: root.accentBg
                                                                 text: "正在学习"
                                                                 onTriggered: root.libraryBridge.moveVideoToList(
                                                                                  groupedVideoDelegate.videoPath,
                                                                                  -1)
                                                             }
 
-                                                            MenuSeparator {}
+                                                            ThemedMenuSeparator {
+                                                                separatorColor: root.borderColor
+                                                            }
 
                                                             Repeater {
                                                                 model: root.libraryBridge
                                                                        ? root.libraryBridge.listCount : 0
 
-                                                                delegate: MenuItem {
+                                                                delegate: ThemedMenuItem {
                                                                     property int targetListIndex: index
+                                                                    textColor: root.textPrimary
+                                                                    disabledTextColor: root.textSecondary
+                                                                    hoverColor: root.accentBg
                                                                     text: {
                                                                         root.libraryBridge.revision
                                                                         return root.libraryBridge.listNameAt(
@@ -740,9 +793,18 @@ Rectangle {
             }
         }
 
-        Menu {
+        ThemedMenu {
             id: learningContextMenu
-            MenuItem {
+            panelColor: root.elevatedBg
+            borderColor: root.borderColor
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
+
+            ThemedMenuItem {
+                textColor: root.textPrimary
+                disabledTextColor: root.textSecondary
+                hoverColor: root.accentBg
                 text: "新建列表"
                 onTriggered: createListDialog.open()
             }

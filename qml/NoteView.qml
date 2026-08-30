@@ -1,11 +1,13 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import Qt.labs.platform 1.1 as Platform
 
 Item {
     id: root
 
     property var noteBridge
+    property string videoPath: ""
     property bool canCreateNote: false
     property color panelBg: "#ffffff"
     property color elevatedBg: "#fafbfc"
@@ -20,6 +22,8 @@ Item {
 
     signal navigationRequested(real startSecs, real endSecs, bool hasRange)
     signal newNoteRequested()
+    signal noteExportSucceeded(string message)
+    signal noteExportFailed(string message)
 
     function formatTimestamp(totalSeconds) {
         var totalMillis = Math.max(0, Math.round((totalSeconds || 0) * 1000))
@@ -76,6 +80,50 @@ Item {
         if (!noteBridge || !flushPendingSave())
             return false
         return noteBridge.deleteNote(index)
+    }
+
+    function defaultExportFileName() {
+        var path = root.videoPath || ""
+        var slash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"))
+        var name = slash >= 0 ? path.substring(slash + 1) : path
+        var dot = name.lastIndexOf(".")
+        var stem = dot > 0 ? name.substring(0, dot) : name
+        return (stem.length > 0 ? stem : "学习笔记") + ".md"
+    }
+
+    function exportNotes() {
+        if (!noteBridge) {
+            root.noteExportFailed("笔记服务尚未就绪")
+            return false
+        }
+        if (!noteBridge.hasVideo) {
+            root.noteExportFailed("请先加载视频")
+            return false
+        }
+        if (noteBridge.noteCount <= 0) {
+            root.noteExportFailed("暂无可导出的笔记")
+            return false
+        }
+        if (!flushPendingSave()) {
+            root.noteExportFailed(noteBridge.statusMessage)
+            return false
+        }
+        exportFileDialog.currentFile = defaultExportFileName()
+        exportFileDialog.open()
+        return true
+    }
+
+    function exportNotesToPath(path) {
+        if (!path || path.length === 0) {
+            root.noteExportFailed("请选择 Markdown 文件保存位置")
+            return false
+        }
+        if (noteBridge.exportMarkdown(path)) {
+            root.noteExportSucceeded(noteBridge.statusMessage)
+            return true
+        }
+        root.noteExportFailed(noteBridge.statusMessage)
+        return false
     }
 
     function focusEditor() {
@@ -139,6 +187,22 @@ Item {
         interval: 500
         repeat: false
         onTriggered: root.flushPendingSave()
+    }
+
+    Platform.FileDialog {
+        id: exportFileDialog
+        title: "导出笔记"
+        fileMode: Platform.FileDialog.SaveFile
+        nameFilters: ["Markdown 文件 (*.md)", "所有文件 (*)"]
+        defaultSuffix: "md"
+
+        onAccepted: {
+            var selected = file
+            var path = selected && selected.toLocalFile
+                       ? selected.toLocalFile()
+                       : (selected ? selected.toString() : "")
+            root.exportNotesToPath(path)
+        }
     }
 
     Shortcut {
@@ -362,6 +426,29 @@ Item {
                             onClicked: root.setPreviewMode(true)
                             ToolTip.visible: hovered
                             ToolTip.text: "预览笔记"
+                        }
+
+                        ThemedToolButton {
+                            id: exportButton
+                            Layout.preferredWidth: 30
+                            Layout.preferredHeight: 30
+                            text: "⇩"
+                            font.pixelSize: 16
+                            enabled: root.noteBridge
+                                     && root.noteBridge.hasVideo
+                                     && root.noteBridge.noteCount > 0
+                            panelColor: root.elevatedBg
+                            borderColor: root.borderColor
+                            textColor: root.textPrimary
+                            disabledTextColor: root.textSecondary
+                            accentColor: root.accent
+                            accentBackgroundColor: root.accentBg
+                            onClicked: root.exportNotes()
+                            ToolTip.visible: hovered
+                            ToolTip.text: !root.noteBridge || !root.noteBridge.hasVideo
+                                          ? "请先加载视频"
+                                          : (root.noteBridge.noteCount > 0
+                                             ? "导出笔记" : "暂无可导出的笔记")
                         }
                     }
                 }

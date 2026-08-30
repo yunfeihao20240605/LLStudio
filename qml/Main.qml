@@ -630,8 +630,21 @@ ApplicationWindow {
     Connections {
         target: subtitleBridge
         function onActiveCueIndexChanged() {
-            if (subtitleBridge.activeCueIndex < 0)
+            if (subtitleBridge.activeCueIndex < 0) {
+                if (!mediaBridge.isPlaying
+                        && subtitleBridge.editingCueIndex >= 0)
+                    return
+                aiTutorBridge.setSubtitleContext(
+                            mediaBridge.loadedPath,
+                            -1,
+                            0,
+                            0,
+                            "",
+                            "",
+                            "",
+                            "")
                 return
+            }
             if (!mediaBridge.isPlaying
                     && subtitleBridge.editingCueIndex >= 0)
                 return
@@ -892,6 +905,11 @@ ApplicationWindow {
                 text: "快捷键…"
                 onTriggered: shortcutHelpDialog.open()
             }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: "关于 LLStudio"
+                onTriggered: aboutDialog.open()
+            }
         }
     }
 
@@ -1135,6 +1153,7 @@ ApplicationWindow {
                     SplitView.preferredHeight: 520
                     subtitleBridge: subtitleBridge
                     noteBridge: noteBridge
+                    videoPath: mediaBridge.loadedPath
                     waveformBridge: waveformBridge
                     aiBridge: aiTutorBridge
                     onNoteCreationRequested: function(startSecs, endSecs, hasRange) {
@@ -1156,6 +1175,13 @@ ApplicationWindow {
                     }
                     onSubtitleSaveSucceeded: function(message) {
                         root.showSuccessMessage(message)
+                    }
+                    onNoteExportSucceeded: function(message) {
+                        root.showSuccessMessage(message)
+                    }
+                    onNoteExportFailed: function(message) {
+                        themeBridge.reportError(message.length > 0
+                                                 ? message : "导出笔记失败")
                     }
                     panelBg: theme.panelBg
                     elevatedBg: theme.elevatedBg
@@ -1242,6 +1268,20 @@ ApplicationWindow {
         textSecondary: theme.textSecondary
         accent: theme.accent
         accentBg: theme.accentBg
+    }
+
+    AboutDialog {
+        id: aboutDialog
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        panelBg: theme.panelBg
+        elevatedBg: theme.elevatedBg
+        borderColor: theme.border
+        textPrimary: theme.textPrimary
+        textSecondary: theme.textSecondary
+        accent: theme.accent
+        accentBg: theme.accentBg
+        darkTheme: theme.darkAppearance
     }
 
     Dialog {

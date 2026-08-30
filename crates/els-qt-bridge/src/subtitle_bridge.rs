@@ -398,7 +398,7 @@ fn srt_path_for_video(video_path: &str) -> Option<PathBuf> {
     Some(parent.join(format!("{stem}.srt")))
 }
 
-fn sibling_subtitle_path(video_path: &str) -> Option<PathBuf> {
+pub(crate) fn sibling_subtitle_path(video_path: &str) -> Option<PathBuf> {
     let video = Path::new(video_path);
     let parent = video.parent()?;
     let stem = video.file_stem()?.to_string_lossy();

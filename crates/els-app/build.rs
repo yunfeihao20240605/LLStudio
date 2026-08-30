@@ -33,6 +33,7 @@ fn main() {
             .qml_file("../../qml/ShortcutHelpDialog.qml")
             .qml_file("../../qml/SpeechSettingsPane.qml")
             .qml_file("../../qml/StatusBar.qml")
+            .qml_file("../../qml/AboutDialog.qml")
             .qml_file("../../qml/theme/Theme.qml")
             .qml_file("../../qml/theme/PaletteLight.qml")
             .qml_file("../../qml/theme/PaletteDark.qml")

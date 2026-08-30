@@ -130,13 +130,27 @@ Rectangle {
                     color: root.borderColor
                 }
 
-                Text {
+                TextEdit {
                     id: messages
                     width: parent.width
+                    height: contentHeight > 0 ? contentHeight + 8 : 0
                     text: root.aiBridge ? formatMessages(root.aiBridge.messagesJson) : ""
                     color: root.textPrimary
-                    wrapMode: Text.Wrap
-                    textFormat: Text.RichText
+                    wrapMode: TextEdit.Wrap
+                    textFormat: TextEdit.RichText
+                    readOnly: true
+                    selectByMouse: true
+                    persistentSelection: true
+                    selectionColor: root.accent
+                    selectedTextColor: "#ffffff"
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: function(mouse) {
+                            copyMenu.popup(messages, mouse.x, mouse.y)
+                        }
+                    }
                 }
             }
         }
@@ -236,6 +250,32 @@ Rectangle {
                     onClicked: root.chooseQuickQuestion(modelData)
                 }
             }
+        }
+    }
+
+    Menu {
+        id: copyMenu
+
+        background: Rectangle {
+            color: root.elevatedBg
+            border.color: root.borderColor
+            radius: 6
+        }
+
+        ThemedMenuItem {
+            text: "复制"
+            enabled: messages.selectedText.length > 0
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
+            onTriggered: messages.copy()
+        }
+
+        ThemedMenuItem {
+            text: "全选"
+            textColor: root.textPrimary
+            hoverColor: root.accentBg
+            onTriggered: messages.selectAll()
         }
     }
 
