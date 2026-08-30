@@ -809,45 +809,15 @@ Rectangle {
                                 }
                             } else {
                                 var pixelsPerBin = secondsPerBin / visibleDuration * width
-                                if (root.zoomFactor >= 200) {
-                                    for (var index = firstBin; index < lastBin; ++index) {
-                                        var nextIndex = Math.min(lastBin - 1, index + 1)
-                                        var leftX = ((dataStart + index * secondsPerBin - rangeStart)
-                                                     / visibleDuration) * width
-                                        var rightX = ((dataStart + (index + 1) * secondsPerBin
-                                                       - rangeStart) / visibleDuration) * width
-                                        var currentMin = Math.max(-1, Math.min(0,
-                                            peaks[index * 2] * renderGain))
-                                        var currentMax = Math.max(0, Math.min(1,
-                                            peaks[index * 2 + 1] * renderGain))
-                                        var nextMin = Math.max(-1, Math.min(0,
-                                            peaks[nextIndex * 2] * renderGain))
-                                        var nextMax = Math.max(0, Math.min(1,
-                                            peaks[nextIndex * 2 + 1] * renderGain))
-                                        context.beginPath()
-                                        context.moveTo(leftX,
-                                            centerY - currentMax * amplitudeHeight)
-                                        context.lineTo(rightX,
-                                            centerY - nextMax * amplitudeHeight)
-                                        context.lineTo(rightX,
-                                            centerY - nextMin * amplitudeHeight)
-                                        context.lineTo(leftX,
-                                            centerY - currentMin * amplitudeHeight)
-                                        context.closePath()
-                                        context.fillStyle = barColor(index, index + 1)
-                                        context.fill()
-                                    }
-                                } else {
-                                    var barWidth = Math.max(1,
-                                            Math.min(6, pixelsPerBin * 0.72))
-                                    for (var index = firstBin; index < lastBin; ++index) {
-                                        var localX = ((dataStart + index * secondsPerBin - rangeStart)
-                                                      / visibleDuration) * width
-                                                + (pixelsPerBin - barWidth) * 0.5
-                                        drawBar(localX, barWidth, peaks[index * 2],
-                                                peaks[index * 2 + 1],
-                                                barColor(index, index + 1))
-                                    }
+                                var binGap = Math.min(1, pixelsPerBin * 0.08)
+                                var barWidth = Math.max(1, pixelsPerBin - binGap)
+                                for (var index = firstBin; index < lastBin; ++index) {
+                                    var localX = ((dataStart + index * secondsPerBin - rangeStart)
+                                                  / visibleDuration) * width
+                                            + (pixelsPerBin - barWidth) * 0.5
+                                    drawBar(localX, barWidth, peaks[index * 2],
+                                            peaks[index * 2 + 1],
+                                            barColor(index, index + 1))
                                 }
                             }
 
