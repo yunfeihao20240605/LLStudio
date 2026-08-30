@@ -47,7 +47,7 @@ Dialog {
 
             Label {
                 Layout.fillWidth: true
-                text: "LLStudio"
+                text: "LLStudio · v" + (Qt.application.version || "0.1.3")
                 color: root.textPrimary
                 font.pixelSize: 21
                 font.bold: true
@@ -62,13 +62,6 @@ Dialog {
                 horizontalAlignment: Text.AlignHCenter
             }
 
-            Label {
-                Layout.fillWidth: true
-                text: "版本 " + (Qt.application.version || "0.1.3")
-                color: root.textSecondary
-                font.pixelSize: 12
-                horizontalAlignment: Text.AlignHCenter
-            }
         }
     }
 
