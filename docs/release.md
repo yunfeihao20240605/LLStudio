@@ -18,9 +18,10 @@ git log -1 --oneline
 
 - 代码已经合并到准备发布的分支，通常是 `main`
 - 没有未确认的临时修改
-- 本地可以完成构建检查
-- FFmpeg、libmpv、Qt 和 Rust 相关依赖配置正常
 - 本次版本的功能和已知限制已经确认
+- 版本号、CHANGELOG 章节和 Git 标签名称保持一致
+
+发布前不要求在本地构建安装包。正式构建由推送版本标签后触发的 GitHub Actions 完成。
 
 ## 更新版本号
 
@@ -34,12 +35,6 @@ version = "0.2.0"
 所有 crate 使用 `version.workspace = true`，因此通常只需要修改根目录的 `Cargo.toml`。
 
 应用界面中的版本号通过 `CARGO_PKG_VERSION` 和 `Qt.application.version` 获取，不需要再单独修改 QML 文本。
-
-修改版本号后运行：
-
-```bash
-cargo check
-```
 
 如果 `Cargo.lock` 中的本地 package 版本发生变化，将 `Cargo.lock` 一并提交；不要手动修改锁文件内容。
 
@@ -66,15 +61,15 @@ cargo check
 Release v0.2.0
 ```
 
-## 本地检查
+## 可选本地检查
 
-先检查代码格式和差异：
+本地检查不是发布的前置条件。如果希望在推送前快速确认差异，可以运行：
 
 ```bash
 git diff --check
 ```
 
-运行 Rust 构建检查：
+如果希望提前发现 Rust 编译或测试问题，可以额外运行：
 
 ```bash
 cargo check
@@ -86,19 +81,21 @@ cargo check
 cargo test --workspace
 ```
 
-在 macOS 上还可以运行本地开发脚本确认 Qt、FFmpeg、mpv 和 QML 资源正常：
+在 macOS 上也可以选择运行本地开发脚本确认 Qt、FFmpeg、mpv 和 QML 资源正常：
 
 ```bash
 chmod +x scripts/run-macos-dev.sh
 ./scripts/run-macos-dev.sh
 ```
 
-需要构建 macOS 安装包时：
+如果需要在本地预览 macOS 安装包，可以手动执行：
 
 ```bash
 chmod +x scripts/build-macos-dmg.sh
 ./scripts/build-macos-dmg.sh
 ```
+
+以上本地构建和测试均为可选步骤，不影响后续创建标签和触发远程发布。
 
 ## 提交版本修改
 
@@ -204,21 +201,20 @@ git push origin v0.2.0
 
 ## 版本发布示例
 
-以 `v0.2.0` 为例，完整命令如下：
+以 `v0.3.0` 为例，完整发布命令如下。这里不包含本地构建命令：
 
 ```bash
 git status
 
 # 修改 Cargo.toml 和 CHANGELOG.md 后
-cargo check
 git diff --check
 
 git add Cargo.toml Cargo.lock CHANGELOG.md
-git commit -m "Release v0.2.0"
+git commit -m "Release v0.3.0"
 
-git tag -a v0.2.0 -m "Release v0.2.0"
+git tag -a v0.3.0 -m "Release v0.3.0"
 git push origin main
-git push origin v0.2.0
+git push origin v0.3.0
 ```
 
 发布完成后，版本号、Git 标签、GitHub Release 和安装包名称应保持一致。
