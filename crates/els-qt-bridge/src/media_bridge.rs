@@ -37,8 +37,8 @@ pub mod qobject {
         fn load_demo_video(self: Pin<&mut MediaBridge>) -> bool;
 
         #[qinvokable]
-        #[cxx_name = "loadVideoPath"]
-        fn load_video_path(self: Pin<&mut MediaBridge>, path: &QString) -> bool;
+        #[cxx_name = "loadMediaPath"]
+        fn load_media_path(self: Pin<&mut MediaBridge>, path: &QString) -> bool;
 
         #[qinvokable]
         #[cxx_name = "pickVideoFile"]
@@ -95,7 +95,7 @@ pub struct MediaBridgeRust {
 
 impl Default for MediaBridgeRust {
     fn default() -> Self {
-        let player = els_media_core::Player::default();
+        let player = els_media_core::Player::new_media_playback();
         let mpv_handle = player.mpv_handle_value();
         let status_message = if mpv_handle == 0 {
             QString::from("libmpv backend is unavailable")
@@ -123,10 +123,10 @@ impl qobject::MediaBridge {
     fn load_demo_video(mut self: Pin<&mut Self>) -> bool {
         let demo_path = resolve_video_path(DEMO_VIDEO_PATH);
         self.as_mut()
-            .load_video_path(&QString::from(&demo_path.to_string_lossy().to_string()))
+            .load_media_path(&QString::from(&demo_path.to_string_lossy().to_string()))
     }
 
-    fn load_video_path(mut self: Pin<&mut Self>, path: &QString) -> bool {
+    fn load_media_path(mut self: Pin<&mut Self>, path: &QString) -> bool {
         let requested_path = path.to_string();
         let normalized_path = normalize_video_path(&requested_path);
         let normalized_string = normalized_path.to_string_lossy().to_string();
@@ -143,7 +143,7 @@ impl qobject::MediaBridge {
                 true
             }
             Err(err) => {
-                let message = format!("Failed to load video path: {err}");
+                let message = format!("Failed to load media path: {err}");
                 eprintln!("{message}");
                 self.as_mut().set_status_message(QString::from(&message));
                 false

@@ -30,8 +30,17 @@ impl Default for Player {
 }
 
 impl Player {
-    pub fn new_audio_playback() -> Self {
+    /// Creates the application media player.
+    ///
+    /// The same player is used for both video and audio. Keeping the media
+    /// open is important for audio-only files because there is no video
+    /// frame keeping the libmpv item alive after playback reaches its end.
+    pub fn new_media_playback() -> Self {
         Self::new_with_keep_open(true)
+    }
+
+    pub fn new_audio_playback() -> Self {
+        Self::new_media_playback()
     }
 
     fn new_with_keep_open(keep_open: bool) -> Self {
@@ -121,6 +130,16 @@ impl crate::MediaController for Player {
                 "seek position {position_secs:.2} exceeds duration {:.2}",
                 self.duration_secs
             )));
+        }
+
+        // Loading through libmpv is asynchronous. A waveform click can arrive
+        // before `time-pos` becomes available, especially for audio-only
+        // files because the video render item is intentionally hidden. Keep
+        // the requested position and let the normal tick/ready path apply it.
+        if self.with_mpv(|mpv| mpv.time_pos())?.is_none() {
+            self.current_position_secs = position_secs;
+            self.pending_initial_position_secs = Some(position_secs);
+            return Ok(());
         }
 
         self.with_mpv(|mpv| mpv.seek_absolute(position_secs))?;
@@ -408,5 +427,6 @@ mod tests {
     fn audio_player_keeps_the_loaded_file_open() {
         assert!(!Player::default().keep_open);
         assert!(Player::new_audio_playback().keep_open);
+        assert!(Player::new_media_playback().keep_open);
     }
 }

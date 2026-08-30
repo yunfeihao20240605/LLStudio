@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import Qt.labs.platform 1.1 as Platform
 import com.yfhao.els.mpv 1.0
 
 Rectangle {
@@ -94,7 +95,7 @@ Rectangle {
             return
 
         root.videoLoadStarted()
-        if (!mediaBridge.loadVideoPath(path)) {
+        if (!mediaBridge.loadMediaPath(path)) {
             root.videoLoadFailed(mediaBridge.statusMessage)
             return
         }
@@ -117,9 +118,27 @@ Rectangle {
     }
 
     function openAudio() {
-        var pickedPath = mediaBridge ? mediaBridge.pickAudioFile() : ""
-        if (pickedPath.length > 0)
-            loadMediaAndRelatedAssets(pickedPath, true)
+        audioFileDialog.open()
+    }
+
+    function openAudioPath(selectedFile) {
+        var path = selectedFile && selectedFile.toLocalFile
+                ? selectedFile.toLocalFile()
+                : (selectedFile ? selectedFile.toString() : "")
+        if (path.length > 0)
+            loadMediaAndRelatedAssets(path, true)
+    }
+
+    Platform.FileDialog {
+        id: audioFileDialog
+        title: "打开音频"
+        fileMode: Platform.FileDialog.OpenFile
+        nameFilters: [
+            "音频文件 (*.mp3 *.wav *.m4a *.aac *.flac *.ogg *.opus)",
+            "所有文件 (*)"
+        ]
+
+        onAccepted: root.openAudioPath(file)
     }
 
     radius: fullScreenMode ? 0 : 16
