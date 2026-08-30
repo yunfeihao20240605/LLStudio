@@ -45,6 +45,10 @@ pub mod qobject {
         fn pick_video_file(self: Pin<&mut MediaBridge>) -> QString;
 
         #[qinvokable]
+        #[cxx_name = "pickAudioFile"]
+        fn pick_audio_file(self: Pin<&mut MediaBridge>) -> QString;
+
+        #[qinvokable]
         fn play(self: Pin<&mut MediaBridge>) -> bool;
 
         #[qinvokable]
@@ -148,7 +152,29 @@ impl qobject::MediaBridge {
     }
 
     fn pick_video_file(mut self: Pin<&mut Self>) -> QString {
-        match pick_video_file_path() {
+        match pick_media_file_path("Select a video file for LLStudio", "public.movie") {
+            Ok(Some(path)) => {
+                let selected = path.to_string_lossy().to_string();
+                self.as_mut()
+                    .set_status_message(QString::from("File selected"));
+                QString::from(&selected)
+            }
+            Ok(None) => {
+                self.as_mut()
+                    .set_status_message(QString::from("File selection cancelled"));
+                QString::from("")
+            }
+            Err(err) => {
+                let message = format!("Failed to open file picker: {err}");
+                eprintln!("{message}");
+                self.as_mut().set_status_message(QString::from(&message));
+                QString::from("")
+            }
+        }
+    }
+
+    fn pick_audio_file(mut self: Pin<&mut Self>) -> QString {
+        match pick_media_file_path("Select an audio file for LLStudio", "public.audio") {
             Ok(Some(path)) => {
                 let selected = path.to_string_lossy().to_string();
                 self.as_mut()
@@ -368,14 +394,13 @@ fn resolve_video_path(path: &str) -> PathBuf {
     }
 }
 
-fn pick_video_file_path() -> Result<Option<PathBuf>, String> {
+fn pick_media_file_path(prompt: &str, file_type: &str) -> Result<Option<PathBuf>, String> {
     #[cfg(target_os = "macos")]
     {
+        let script =
+            format!("POSIX path of (choose file with prompt {prompt:?} of type {{{file_type:?}}})");
         let output = Command::new("osascript")
-            .args([
-                "-e",
-                r#"POSIX path of (choose file with prompt "Select a video file for LLStudio")"#,
-            ])
+            .args(["-e", &script])
             .output()
             .map_err(|err| err.to_string())?;
 

@@ -849,6 +849,10 @@ ApplicationWindow {
                 onTriggered: videoPlaybackPane.openVideo()
             }
             Platform.MenuItem {
+                text: "打开音频"
+                onTriggered: videoPlaybackPane.openAudio()
+            }
+            Platform.MenuItem {
                 text: "导入字幕"
             }
             Platform.MenuSeparator {}

@@ -22,6 +22,7 @@ Rectangle {
     property var waveformBridge
     property bool fullScreenMode: false
     property bool subtitlesVisible: true
+    property bool audioMode: false
 
     signal manualSeekRequested(real positionSecs)
     signal normalPlaybackToggleRequested()
@@ -81,6 +82,10 @@ Rectangle {
     }
 
     function loadVideoAndRelatedAssets(path) {
+        loadMediaAndRelatedAssets(path, false)
+    }
+
+    function loadMediaAndRelatedAssets(path, isAudio) {
         if (!mediaBridge) {
             root.videoLoadFailed("媒体播放器不可用")
             return
@@ -93,6 +98,7 @@ Rectangle {
             root.videoLoadFailed(mediaBridge.statusMessage)
             return
         }
+        root.audioMode = isAudio
 
         if (subtitleBridge)
             subtitleBridge.loadForVideoPath(path)
@@ -108,6 +114,12 @@ Rectangle {
         var pickedPath = mediaBridge ? mediaBridge.pickVideoFile() : ""
         if (pickedPath.length > 0)
             loadVideoAndRelatedAssets(pickedPath)
+    }
+
+    function openAudio() {
+        var pickedPath = mediaBridge ? mediaBridge.pickAudioFile() : ""
+        if (pickedPath.length > 0)
+            loadMediaAndRelatedAssets(pickedPath, true)
     }
 
     radius: fullScreenMode ? 0 : 16
@@ -148,6 +160,43 @@ Rectangle {
                     id: videoSurface
                     anchors.fill: parent
                     mpvHandleToken: mediaBridge ? mediaBridge.mpvHandleToken : "0"
+                    visible: !root.audioMode
+                }
+
+                Rectangle {
+                    z: 4
+                    anchors.fill: parent
+                    visible: root.audioMode && mediaBridge && mediaBridge.loadedPath.length > 0
+                    color: root.elevatedBg
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 12
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: "♫"
+                            color: root.accent
+                            font.pixelSize: 58
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: mediaBridge ? mediaBridge.mediaSummary : "音频"
+                            color: root.textPrimary
+                            font.pixelSize: 16
+                            elide: Text.ElideMiddle
+                            width: Math.min(parent.parent.width * 0.8, 420)
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: "音频播放模式"
+                            color: root.textSecondary
+                            font.pixelSize: 13
+                        }
+                    }
                 }
 
                 Image {
