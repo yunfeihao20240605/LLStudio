@@ -27,47 +27,59 @@ Dialog {
         radius: 12
     }
 
-    contentItem: ColumnLayout {
-        spacing: 12
+    contentItem: Rectangle {
+        color: root.elevatedBg
 
-        Image {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 270
-            source: root.darkTheme
-                    ? "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand.png"
-                    : "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand-light.png"
-            fillMode: Image.PreserveAspectFit
-            smooth: true
-        }
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 12
 
-        Label {
-            Layout.fillWidth: true
-            text: "LLStudio"
-            color: root.textPrimary
-            font.pixelSize: 21
-            font.bold: true
-            horizontalAlignment: Text.AlignHCenter
-        }
+            Image {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 270
+                source: root.darkTheme
+                        ? "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand.png"
+                        : "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand-light.png"
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
 
-        Label {
-            Layout.fillWidth: true
-            text: "语言学习工作台"
-            color: root.textSecondary
-            font.pixelSize: 13
-            horizontalAlignment: Text.AlignHCenter
-        }
+            Label {
+                Layout.fillWidth: true
+                text: "LLStudio"
+                color: root.textPrimary
+                font.pixelSize: 21
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+            }
 
-        Label {
-            Layout.fillWidth: true
-            text: "版本 " + (Qt.application.version || "0.1.3")
-            color: root.textSecondary
-            font.pixelSize: 12
-            horizontalAlignment: Text.AlignHCenter
+            Label {
+                Layout.fillWidth: true
+                text: "语言学习工作台"
+                color: root.textSecondary
+                font.pixelSize: 13
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: "版本 " + (Qt.application.version || "0.1.3")
+                color: root.textSecondary
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+            }
         }
     }
 
     footer: DialogButtonBox {
         alignment: Qt.AlignRight
+
+        background: Rectangle {
+            color: root.elevatedBg
+            border.color: root.borderColor
+            border.width: 1
+        }
 
         ThemedToolButton {
             text: "关闭"
