@@ -34,6 +34,7 @@ Item {
     signal trainingPlaybackToggleRequested()
     signal resetAlignmentRequested()
     signal deleteRequested()
+    signal exportRequested()
 
     function requestPaint() {
         recordingCanvas.requestPaint()
@@ -374,6 +375,18 @@ Item {
                      ? "暂停播放录音" : "继续播放录音")
             enabled: root.recordingBridge && root.recordingBridge.hasRecording
             onTriggered: root.trainingPlaybackToggleRequested()
+        }
+
+        ThemedMenuItem {
+            textColor: root.textColor
+            disabledTextColor: root.textColor
+            hoverColor: root.menuHoverColor
+            text: "保存音频"
+            enabled: root.recordingBridge
+                     && root.recordingBridge.hasRecording
+                     && !root.recordingBridge.isRecording
+                     && !root.recordingBridge.isProcessing
+            onTriggered: root.exportRequested()
         }
 
         ThemedMenuSeparator { separatorColor: root.borderColor }

@@ -78,6 +78,13 @@ pub mod qobject {
         fn reset_alignment(self: Pin<&mut RecordingBridge>) -> bool;
 
         #[qinvokable]
+        #[cxx_name = "exportActiveRecording"]
+        fn export_active_recording(
+            self: Pin<&mut RecordingBridge>,
+            destination: &QString,
+        ) -> bool;
+
+        #[qinvokable]
         #[cxx_name = "deleteRecording"]
         fn delete_recording(self: Pin<&mut RecordingBridge>) -> bool;
 
@@ -448,6 +455,91 @@ impl qobject::RecordingBridge {
 
     fn reset_alignment(self: Pin<&mut Self>) -> bool {
         self.save_alignment_offset(0.0)
+    }
+
+    fn export_active_recording(
+        mut self: Pin<&mut Self>,
+        destination: &QString,
+    ) -> bool {
+        if self.rust().is_recording || self.rust().is_processing {
+            self.as_mut()
+                .set_status_message(QString::from("录音正在处理中，暂时无法导出"));
+            return false;
+        }
+
+        let destination_string = destination.to_string();
+        let destination_string = destination_string.trim();
+        if destination_string.is_empty() {
+            self.as_mut()
+                .set_status_message(QString::from("录音保存位置为空"));
+            return false;
+        }
+
+        let destination_path = Path::new(destination_string);
+        if destination_path.is_dir() {
+            self.as_mut()
+                .set_status_message(QString::from("录音保存位置不是文件"));
+            return false;
+        }
+        if destination_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_none_or(|extension| !extension.eq_ignore_ascii_case("wav"))
+        {
+            self.as_mut()
+                .set_status_message(QString::from("录音导出目前只支持 WAV 格式"));
+            return false;
+        }
+
+        let recording = match self.rust().session.recording().cloned() {
+            Some(recording) => recording,
+            None => {
+                self.as_mut()
+                    .set_status_message(QString::from("当前没有可导出的录音"));
+                return false;
+            }
+        };
+        let source_path = Path::new(recording.active_file_path());
+        if !source_path.is_file() {
+            self.as_mut()
+                .set_status_message(QString::from("当前录音文件不存在"));
+            return false;
+        }
+
+        let same_file = source_path == destination_path
+            || source_path
+                .canonicalize()
+                .ok()
+                .zip(destination_path.canonicalize().ok())
+                .is_some_and(|(source, destination)| source == destination);
+        if same_file {
+            self.as_mut()
+                .set_status_message(QString::from("保存位置不能与当前录音文件相同"));
+            return false;
+        }
+
+        let parent = destination_path.parent().unwrap_or_else(|| Path::new("."));
+        if !parent.is_dir() {
+            self.as_mut()
+                .set_status_message(QString::from("录音保存目录不存在"));
+            return false;
+        }
+
+        match std::fs::copy(source_path, destination_path) {
+            Ok(_) => {
+                self.as_mut().set_status_message(QString::from(&format!(
+                    "录音已导出：{}",
+                    destination_path.display()
+                )));
+                true
+            }
+            Err(error) => {
+                self.as_mut().set_status_message(QString::from(&format!(
+                    "导出录音失败：{error}"
+                )));
+                false
+            }
+        }
     }
 
     fn delete_recording(mut self: Pin<&mut Self>) -> bool {

@@ -121,10 +121,29 @@ Rectangle {
         audioFileDialog.open()
     }
 
+    function localPathFromUrl(value) {
+        if (!value)
+            return ""
+
+        if (typeof value.toLocalFile === "function") {
+            var localPath = value.toLocalFile()
+            if (localPath && localPath.length > 0)
+                return localPath
+        }
+
+        var text = value.toString()
+        if (text.indexOf("file://") === 0) {
+            try {
+                return decodeURIComponent(text.substring(7))
+            } catch (error) {
+                return text.substring(7)
+            }
+        }
+        return text
+    }
+
     function openAudioPath(selectedFile) {
-        var path = selectedFile && selectedFile.toLocalFile
-                ? selectedFile.toLocalFile()
-                : (selectedFile ? selectedFile.toString() : "")
+        var path = localPathFromUrl(selectedFile)
         if (path.length > 0)
             loadMediaAndRelatedAssets(path, true)
     }

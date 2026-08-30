@@ -50,6 +50,7 @@ Rectangle {
     signal recordingDeleteRequested()
     signal recordingTrainingToggleRequested()
     signal recordingPlaybackSeekRequested(real positionSecs)
+    signal recordingExportRequested()
     signal originalTrainingToggleRequested()
     signal speechRecognitionRequested(real startSecs, real endSecs)
     signal selectionAdjustmentStarted()
@@ -893,6 +894,7 @@ Rectangle {
                                 root.recordingBridge.resetAlignment()
                         }
                         onDeleteRequested: root.recordingDeleteRequested()
+                        onExportRequested: root.recordingExportRequested()
                     }
 
                     Rectangle {

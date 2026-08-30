@@ -324,6 +324,54 @@ ApplicationWindow {
         successMessageTimer.restart()
     }
 
+    function recordingExportFileName() {
+        var start = Math.max(0, recordingBridge ? recordingBridge.targetStart : 0)
+        var end = Math.max(start, recordingBridge ? recordingBridge.targetEnd : start)
+        return "recording-" + start.toFixed(3) + "-" + end.toFixed(3) + ".wav"
+    }
+
+    function openRecordingExportDialog() {
+        if (!recordingBridge || !recordingBridge.hasRecording) {
+            themeBridge.reportError("当前没有可导出的录音")
+            return
+        }
+        recordingExportDialog.currentFile = recordingExportFileName()
+        recordingExportDialog.open()
+    }
+
+    function localPathFromUrl(value) {
+        if (!value)
+            return ""
+
+        if (typeof value.toLocalFile === "function") {
+            var localPath = value.toLocalFile()
+            if (localPath && localPath.length > 0)
+                return localPath
+        }
+
+        var text = value.toString()
+        if (text.indexOf("file://") === 0) {
+            try {
+                return decodeURIComponent(text.substring(7))
+            } catch (error) {
+                return text.substring(7)
+            }
+        }
+        return text
+    }
+
+    function exportRecordingToPath(selectedFile) {
+        var path = localPathFromUrl(selectedFile)
+        if (path.length === 0) {
+            themeBridge.reportError("请选择录音保存位置")
+            return
+        }
+        if (recordingBridge.exportActiveRecording(path))
+            showSuccessMessage(recordingBridge.statusMessage)
+        else
+            themeBridge.reportError(recordingBridge.statusMessage)
+    }
+
     function textInputHasFocus() {
         var item = activeFocusItem
         return item && item.text !== undefined
@@ -671,6 +719,16 @@ ApplicationWindow {
         interval: 2200
         repeat: false
         onTriggered: root.successMessage = ""
+    }
+
+    Platform.FileDialog {
+        id: recordingExportDialog
+        title: "保存录音"
+        fileMode: Platform.FileDialog.SaveFile
+        nameFilters: ["WAV 音频 (*.wav)", "所有文件 (*)"]
+        defaultSuffix: "wav"
+
+        onAccepted: root.exportRecordingToPath(file)
     }
 
     Timer {
@@ -1113,6 +1171,7 @@ ApplicationWindow {
                         recordingPlaybackBridge.unload()
                         recordingBridge.deleteRecording()
                     }
+                    onRecordingExportRequested: root.openRecordingExportDialog()
                     onRecordingTrainingToggleRequested:
                         root.toggleRecordingTraining()
                     onOriginalTrainingToggleRequested:

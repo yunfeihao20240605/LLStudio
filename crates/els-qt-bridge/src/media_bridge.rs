@@ -375,11 +375,15 @@ fn normalize_video_path(path: &str) -> PathBuf {
         return PathBuf::new();
     }
 
-    let candidate = PathBuf::from(trimmed);
+    // Qt's FileDialog may return a file URL on some desktop platforms. Keep
+    // this fallback here as well as in QML so the media backend never sees a
+    // path such as `/file:///Users/...`.
+    let local_path = trimmed.strip_prefix("file://").unwrap_or(trimmed);
+    let candidate = PathBuf::from(local_path);
     if candidate.is_absolute() {
         candidate
     } else {
-        resolve_video_path(trimmed)
+        resolve_video_path(local_path)
     }
 }
 
