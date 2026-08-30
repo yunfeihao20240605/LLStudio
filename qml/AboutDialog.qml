@@ -16,7 +16,7 @@ Dialog {
 
     modal: true
     width: 540
-    height: 430
+    height: 460
     closePolicy: Popup.CloseOnEscape
 
     background: Rectangle {
@@ -35,7 +35,7 @@ Dialog {
         Label {
             anchors.fill: parent
             anchors.leftMargin: 22
-            text: "关于 LLStudio"
+            text: "LLStudio"
             color: root.textPrimary
             font.pixelSize: 20
             verticalAlignment: Text.AlignVCenter
@@ -52,7 +52,7 @@ Dialog {
 
             Image {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 270
+                Layout.preferredHeight: 230
                 source: root.darkTheme
                         ? "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand.png"
                         : "qrc:/qt/qml/com/yfhao/els/app/llstudio-brand-light.png"
@@ -62,19 +62,22 @@ Dialog {
 
             Label {
                 Layout.fillWidth: true
-                text: "LLStudio · v" + (Qt.application.version || "0.1.3")
-                color: root.textPrimary
-                font.pixelSize: 21
+                text: "Version " + (Qt.application.version || "0.2.0")
+                color: root.textSecondary
+                font.pixelSize: 14
                 font.bold: true
                 horizontalAlignment: Text.AlignHCenter
             }
 
             Label {
                 Layout.fillWidth: true
-                text: "语言学习工作台"
+                Layout.preferredHeight: implicitHeight
+                text: "以兴趣为引，以 AI 为伴，\n随时随地享受个性化学习"
                 color: root.textSecondary
                 font.pixelSize: 13
+                wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
 
         }
