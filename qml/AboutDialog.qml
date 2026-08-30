@@ -14,7 +14,6 @@ Dialog {
     property color accentBg: "#eaf1fe"
     property bool darkTheme: false
 
-    title: "关于 LLStudio"
     modal: true
     width: 540
     height: 430
@@ -25,6 +24,22 @@ Dialog {
         border.color: root.borderColor
         border.width: 1
         radius: 12
+    }
+
+    header: Rectangle {
+        implicitHeight: 52
+        color: root.panelBg
+        border.color: root.borderColor
+        border.width: 1
+
+        Label {
+            anchors.fill: parent
+            anchors.leftMargin: 22
+            text: "关于 LLStudio"
+            color: root.textPrimary
+            font.pixelSize: 20
+            verticalAlignment: Text.AlignVCenter
+        }
     }
 
     contentItem: Rectangle {
