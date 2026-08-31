@@ -18,7 +18,7 @@ Dialog {
     title: "快捷键"
     modal: true
     width: 510
-    height: 430
+    height: 520
     closePolicy: Popup.CloseOnEscape
 
     background: Rectangle {
@@ -66,13 +66,19 @@ Dialog {
         }
     }
 
+    // 修饰键按平台显示：macOS 为 ⌘，Windows / Linux 为 Ctrl
+    readonly property bool isMac: Qt.platform.os === "osx"
+    readonly property string modKey: isMac ? "⌘" : "Ctrl"
+    readonly property string modName: isMac ? "⌘（Command）" : "Ctrl"
+
     contentItem: ListView {
         id: shortcutList
         clip: true
         spacing: 4
         model: [
-            { keys: "⌘ O", action: "打开视频" },
-            { keys: "⌘ ,", action: "打开设置" },
+            { keys: root.modKey + " O", action: "打开视频" },
+            { keys: root.modKey + " ,", action: "打开设置" },
+            { keys: root.modKey + " F", action: "查找" },
             { keys: "空格", action: "开始、暂停或继续训练；无选区时控制普通播放" },
             { keys: "Shift + 空格", action: "播放、暂停或继续原视频" },
             { keys: "N", action: "以上一片段终点开始新片段" },

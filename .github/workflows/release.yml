@@ -166,6 +166,22 @@ jobs:
             throw "NSIS was not installed: $makensis"
           }
           $env:Path = "$nsisDir;$env:Path"
+          $metadataJson = & cargo metadata --no-deps --format-version 1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to read Cargo package metadata"
+          }
+          $metadata = ($metadataJson -join "`n") | ConvertFrom-Json
+          $package = $metadata.packages | Where-Object { $_.name -eq "els-app" } | Select-Object -First 1
+          if (-not $package -or $package.version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Unable to determine a valid els-app version from Cargo metadata"
+          }
+          $productVersion = $package.version
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $tagVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+            if ($tagVersion -ne $productVersion) {
+              throw "Git tag version $tagVersion does not match Cargo version $productVersion"
+            }
+          }
           cargo build --release -p els-app --target ${{ matrix.target_triple }}
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item target/${{ matrix.target_triple }}/release/els-app.exe dist/
@@ -176,7 +192,7 @@ jobs:
           }
           windeployqt --release --qmldir qml --compiler-runtime --no-translations dist/els-app.exe
           pwsh -File scripts/validate-windows-package.ps1 -Dist dist
-          & $makensis installer.nsi
+          & $makensis "/DPRODUCT_VERSION=$productVersion" installer.nsi
 
       # ----------------------------------------------------
       # Linux 打包流程 (.deb)

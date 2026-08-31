@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.3.1] - 2026-08-31
+
+### 优化 (Improvements)
+
+- Windows 安装器版本由 Cargo workspace 版本自动同步，避免安装器版本号滞后
+- Windows 发布构建明确使用 release 模式，并加强 Qt 平台插件和 QML 模块检查
+- Windows MinGW 构建启用 mpv OpenGL 视频渲染器，同时保留 macOS/Linux 现有渲染路径
+
+### 修复 (Bug Fixes)
+
+- 修复 Windows 双击启动时出现控制台窗口的问题
+- 修复 Windows 下视频渲染器返回空指针导致的启动和渲染风险
+
+### 发布说明 (Release Notes)
+
+- 本版本重点修复 Windows 启动与安装包运行时依赖问题，并统一安装器版本同步规则
+
+---
+
 ## [v0.3.0] - 2026-08-30
 
 ### 新增 (Features)

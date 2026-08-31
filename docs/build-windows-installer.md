@@ -32,3 +32,6 @@ $env:Qt6_DIR = "C:\Qt\6.6.3\mingw_64\lib\cmake\Qt6"
 ```
 
 输出安装程序为仓库根目录下的 `LLStudio-Setup.exe`。
+
+安装程序版本由 `cargo metadata` 自动读取 `els-app` 的版本，不需要修改 `installer.nsi`。
+发布时应先同步修改根目录 `Cargo.toml` 的 workspace 版本号，再创建相同版本的 `v*` Git 标签；如果两者不一致，GitHub Actions 会直接失败。

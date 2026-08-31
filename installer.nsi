@@ -1,5 +1,9 @@
 !define PRODUCT_NAME "LLStudio"
-!define PRODUCT_VERSION "0.1.3"
+; PRODUCT_VERSION is supplied by the build script from Cargo metadata.
+; Refuse to build without it so a stale installer version cannot slip into a release.
+!ifndef PRODUCT_VERSION
+  !error "PRODUCT_VERSION must be supplied, for example /DPRODUCT_VERSION=0.3.1"
+!endif
 !define PRODUCT_PUBLISHER "yunfeihao20240605"
 !define PRODUCT_WEB_SITE "https://github.com/yunfeihao20240605/LLStudio"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\els-app.exe"

@@ -95,6 +95,16 @@ if (-not $env:Qt6_DIR) {
 $env:CMAKE_PREFIX_PATH = $qtPrefix
 
 rustup target add $target
+$metadataJson = & cargo metadata --no-deps --format-version 1
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to read Cargo package metadata"
+}
+$metadata = ($metadataJson -join "`n") | ConvertFrom-Json
+$package = $metadata.packages | Where-Object { $_.name -eq "els-app" } | Select-Object -First 1
+if (-not $package -or $package.version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+    throw "Unable to determine a valid els-app version from Cargo metadata"
+}
+$productVersion = $package.version
 $dist = Join-Path $projectRoot "dist"
 Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $dist | Out-Null
@@ -129,5 +139,5 @@ if (-not $nsis) {
 }
 
 & (Join-Path $projectRoot "scripts\validate-windows-package.ps1") -Dist $dist
-& $nsis.Source (Join-Path $projectRoot "installer.nsi")
+& $nsis.Source "/DPRODUCT_VERSION=$productVersion" (Join-Path $projectRoot "installer.nsi")
 Write-Host "Built: $(Join-Path $projectRoot 'LLStudio-Setup.exe')"
