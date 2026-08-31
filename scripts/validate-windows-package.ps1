@@ -20,8 +20,15 @@ foreach ($required in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Qml.dll", "Qt6Quick.dll
         throw "Qt runtime is missing $required"
     }
 }
-if (-not (Get-ChildItem (Join-Path $Dist "qml") -ErrorAction SilentlyContinue)) {
-    throw "Qt QML runtime directory is missing"
+foreach ($required in @(
+    "platforms\qwindows.dll",
+    "qml\QtQuick\Controls\qmldir",
+    "qml\QtQuick\Layouts\qmldir",
+    "qml\Qt\labs\platform\qmldir"
+)) {
+    if (-not (Test-Path (Join-Path $Dist $required))) {
+        throw "Required Qt runtime file is missing: $required"
+    }
 }
 if (-not (Get-ChildItem $Dist -Filter "*mpv*.dll" -File)) {
     throw "libmpv runtime DLL is missing"

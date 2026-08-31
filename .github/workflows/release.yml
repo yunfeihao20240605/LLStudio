@@ -174,7 +174,7 @@ jobs:
             Get-ChildItem $runtimeDir -Recurse -Filter *.dll -File -ErrorAction SilentlyContinue |
               Copy-Item -Destination dist -Force
           }
-          windeployqt --qmldir qml --compiler-runtime --no-translations dist/els-app.exe
+          windeployqt --release --qmldir qml --compiler-runtime --no-translations dist/els-app.exe
           pwsh -File scripts/validate-windows-package.ps1 -Dist dist
           & $makensis installer.nsi
 

@@ -5,6 +5,8 @@
 //! （Qt 适配层），最终启动 QML 引擎。除本文件外，其他 crate 都只依赖
 //! trait，不知道具体实现是什么。
 
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use cxx_qt::casting::Upcast;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQmlEngine, QUrl, QString};
 use std::pin::Pin;

@@ -1,4 +1,19 @@
-#ifndef _WIN32
+// The release workflow targets MinGW (`x86_64-pc-windows-gnu`). The renderer
+// is compatible with that toolchain, while the MSVC build still uses the
+// fallback below because mpv/render_gl.h is not MSVC-compatible in all of the
+// supported mpv development packages.
+#if !defined(_WIN32) || defined(__MINGW32__)
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <gl/GL.h>
+#endif
 
 #include "mpv_video_item.h"
 

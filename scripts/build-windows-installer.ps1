@@ -110,7 +110,7 @@ foreach ($runtimeDir in @($MpvRuntimeDir, $env:MPV_PREFIX)) {
         Copy-Item -Destination $dist -Force
 }
 
-& $qtBin --qmldir qml --compiler-runtime --no-translations (Join-Path $dist "els-app.exe")
+& $qtBin --release --qmldir qml --compiler-runtime --no-translations (Join-Path $dist "els-app.exe")
 & $qtBin --version | Out-Null
 
 $nsis = Get-Command "makensis.exe" -ErrorAction SilentlyContinue
