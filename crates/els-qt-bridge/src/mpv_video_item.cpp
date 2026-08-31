@@ -1,9 +1,3 @@
-// The release workflow targets MinGW (`x86_64-pc-windows-gnu`). The renderer
-// is compatible with that toolchain, while the MSVC build still uses the
-// fallback below because mpv/render_gl.h is not MSVC-compatible in all of the
-// supported mpv development packages.
-#if !defined(_WIN32) || defined(__MINGW32__)
-
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -199,36 +193,3 @@ extern "C" void els_register_mpv_video_item()
 {
   qmlRegisterType<MpvVideoItem>("com.yfhao.els.mpv", 1, 0, "MpvVideoItem");
 }
-
-#else
-
-#include "mpv_video_item.h"
-#include <QtQml/qqml.h>
-
-MpvVideoItem::MpvVideoItem(QQuickItem *parent)
-  : QQuickFramebufferObject(parent)
-{}
-
-MpvVideoItem::~MpvVideoItem() = default;
-
-QQuickFramebufferObject::Renderer *MpvVideoItem::createRenderer() const
-{
-  return nullptr;
-}
-
-QString MpvVideoItem::mpvHandleToken() const
-{
-  return m_mpvHandleToken;
-}
-
-void MpvVideoItem::setMpvHandleToken(const QString &handleToken)
-{
-  m_mpvHandleToken = handleToken;
-}
-
-extern "C" void els_register_mpv_video_item()
-{
-  qmlRegisterType<MpvVideoItem>("com.yfhao.els.mpv", 1, 0, "MpvVideoItem");
-}
-
-#endif

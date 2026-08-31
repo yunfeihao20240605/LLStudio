@@ -32,7 +32,7 @@ Require-Command "cargo"
 Require-Command "7z"
 Require-Command "windeployqt"
 
-$target = "x86_64-pc-windows-gnu"
+$target = "x86_64-pc-windows-msvc"
 $env:FFMPEG_DIR = $FfmpegDir
 $env:MPV_PREFIX = $MpvDevDir
 
@@ -67,10 +67,13 @@ $mpvLib = Get-ChildItem $MpvDevDir -Recurse -Filter "libmpv.dll.a" | Select-Obje
 if (-not $mpvLib) {
     throw "mpv development archive has no libmpv.dll.a"
 }
-$env:MPV_PREFIX = if ($mpvLib.Directory.Name -eq "lib") {
-    $mpvLib.Directory.Parent.FullName
-} else {
-    $mpvLib.Directory.FullName
+Require-Command "lib.exe"
+$env:MPV_PREFIX = $mpvLib.Directory.FullName
+$mpvDef = Join-Path $projectRoot "scripts\mpv-msvc.def"
+$mpvImportLibrary = Join-Path $env:MPV_PREFIX "mpv.lib"
+& lib.exe "/def:$mpvDef" /machine:x64 "/out:$mpvImportLibrary"
+if (-not (Test-Path $mpvImportLibrary)) {
+    throw "MSVC mpv import library was not generated"
 }
 $env:PATH = "$FfmpegDir\bin;$env:PATH"
 
@@ -97,8 +100,10 @@ Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $dist | Out-Null
 
 cargo clean --release --target $target
+$env:RUSTFLAGS = "-C debuginfo=2"
 cargo build --release -p els-app --target $target
 Copy-Item "target\$target\release\els-app.exe" $dist
+Copy-Item "target\$target\release\els-app.pdb" (Join-Path $projectRoot "els-app.pdb") -Force
 Copy-Item (Get-ChildItem (Join-Path $FfmpegDir "bin") -Filter "*.dll") $dist -Force
 Copy-Item (Join-Path $FfmpegDir "bin\ffmpeg.exe"), (Join-Path $FfmpegDir "bin\ffprobe.exe") $dist -Force
 

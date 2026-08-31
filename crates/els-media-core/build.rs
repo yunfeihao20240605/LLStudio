@@ -6,8 +6,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=TARGET");
 
     if let Some(prefix) = detect_mpv_prefix() {
-        // Homebrew uses <prefix>/lib while the Windows MinGW mpv development
-        // archive puts libmpv.dll.a directly in <prefix>.
+        // Homebrew uses <prefix>/lib. The Windows MSVC build generates
+        // mpv.lib beside the downloaded MinGW import archive.
         for directory in [prefix.clone(), prefix.join("lib")] {
             if directory.exists() {
                 println!("cargo:rustc-link-search=native={}", directory.display());

@@ -16,7 +16,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\build-windows-installer.ps1
 ```
 
-脚本会自动下载 x64 shared FFmpeg，以及 mpv 的 x64 development/runtime 压缩包；随后构建 `x86_64-pc-windows-gnu`、收集 Qt/FFmpeg/mpv DLL、运行依赖校验并生成 `LLStudio-Setup.exe`。
+脚本会自动下载 x64 shared FFmpeg，以及 mpv 的 x64 development/runtime 压缩包；随后使用 MSVC 构建 `x86_64-pc-windows-msvc`，由 mpv 导出定义生成 MSVC `mpv.lib`，收集 Qt/FFmpeg/mpv DLL、运行依赖校验并生成 `LLStudio-Setup.exe`。发布构建同时保留 `els-app.pdb` 作为私有崩溃分析符号，不会打入安装包。
+
+本地执行前请在 **x64 Native Tools Command Prompt for VS** 中运行，或先加载 Visual Studio 的 MSVC 开发环境，使 `cl.exe`、`lib.exe` 和 Windows SDK 可用。`scripts/mpv-msvc.def` 用于把 mpv DLL 的公开 C API 生成 MSVC 导入库；macOS 和 Linux 不会执行这段逻辑。
 
 如果依赖已经安装在自定义目录，可指定：
 
