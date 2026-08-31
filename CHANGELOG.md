@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Windows 安装器版本由 Cargo workspace 版本自动同步，避免安装器版本号滞后
 - Windows 发布构建明确使用 release 模式，并加强 Qt 平台插件和 QML 模块检查
+- Windows 发布构建固定 FFmpeg/mpv 版本，并对下载资产执行 SHA-256 校验
 - Windows MinGW 构建启用 mpv OpenGL 视频渲染器，同时保留 macOS/Linux 现有渲染路径
 
 ### 修复 (Bug Fixes)
