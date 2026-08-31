@@ -2,6 +2,8 @@
 
 在 PowerShell 中进入仓库根目录，准备以下工具并加入 `PATH`：
 
+Windows 构建使用 `scripts/windows-dependencies.json` 中固定的 FFmpeg/mpv 版本和 SHA-256，构建脚本不会再自动选择第三方仓库的 `latest` 资产。修改依赖版本时，应同时更新资产名称、发布标签和哈希，并先在隔离环境中完成 Defender/VirusTotal 检查。
+
 - Rust/Cargo 和 `rustup`
 - Qt 6（需要 `windeployqt`）
 - 7-Zip（命令名为 `7z`）

@@ -1,0 +1,22 @@
+{
+  "ffmpeg": {
+    "repository": "BtbN/FFmpeg-Builds",
+    "releaseTag": "autobuild-2026-08-31-13-27",
+    "assetName": "ffmpeg-n8.1.2-50-g1a748fe2cd-win64-gpl-shared-8.1.zip",
+    "version": "8.1.2",
+    "sha256": "0a41f31caff48e3035b48f09f5d840bd8d1863008240fc43e457f15e589cf5b3"
+  },
+  "mpv": {
+    "repository": "shinchiro/mpv-winbuild-cmake",
+    "releaseTag": "20260831",
+    "version": "20260831-git-e8673660ab",
+    "dev": {
+      "assetName": "mpv-dev-x86_64-20260831-git-e8673660ab.7z",
+      "sha256": "2bdc5da2c8d51a4410f8d5fecc3ab288889b055378e00347404f242900812199"
+    },
+    "runtime": {
+      "assetName": "mpv-x86_64-20260831-git-e8673660ab.7z",
+      "sha256": "9021f3db28c994981d8cb58b0991683a89a5240967ef2aa0f34503a203fdc8dc"
+    }
+  }
+}

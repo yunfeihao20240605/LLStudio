@@ -7,6 +7,11 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 Set-Location $projectRoot
+$dependencies = Get-Content (Join-Path $projectRoot "scripts\windows-dependencies.json") -Raw | ConvertFrom-Json
+
+function Get-PinnedAssetUrl($Dependency, [string]$AssetName) {
+    return "https://github.com/$($Dependency.repository)/releases/download/$($Dependency.releaseTag)/$AssetName"
+}
 
 function Require-Command([string]$Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -14,9 +19,13 @@ function Require-Command([string]$Name) {
     }
 }
 
-function Download-Asset([string]$Url, [string]$Output) {
+function Download-Asset([string]$Url, [string]$Output, [string]$ExpectedSha256) {
     Write-Host "Downloading $Url"
     Invoke-WebRequest -Uri $Url -OutFile $Output
+    $actualSha256 = (Get-FileHash -Path $Output -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $ExpectedSha256.ToLowerInvariant()) {
+        throw "SHA-256 mismatch for $Output. Expected $ExpectedSha256, got $actualSha256"
+    }
 }
 
 Require-Command "cargo"
@@ -28,23 +37,11 @@ $env:FFMPEG_DIR = $FfmpegDir
 $env:MPV_PREFIX = $MpvDevDir
 
 if (-not (Test-Path (Join-Path $FfmpegDir "bin\ffmpeg.exe"))) {
-    $ffmpegRelease = Invoke-RestMethod "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest"
-    $ffmpegAsset = $ffmpegRelease.assets |
-        Where-Object { $_.name -match "^ffmpeg-n\d+.*win64-gpl-shared.*\.zip$" } |
-        Select-Object -First 1
-    if (-not $ffmpegAsset) {
-        $ffmpegAsset = $ffmpegRelease.assets |
-            Where-Object { $_.name -match "^ffmpeg-master-latest-win64-(gpl|lgpl)-shared\.zip$" } |
-            Select-Object -First 1
-    }
-    if (-not $ffmpegAsset) {
-        throw "No x64 shared FFmpeg asset found"
-    }
-
     $ffmpegZip = Join-Path $env:TEMP "llstudio-ffmpeg.zip"
     $ffmpegUnpack = Join-Path $env:TEMP "llstudio-ffmpeg"
     Remove-Item $ffmpegUnpack -Recurse -Force -ErrorAction SilentlyContinue
-    Download-Asset $ffmpegAsset.browser_download_url $ffmpegZip
+    $ffmpeg = $dependencies.ffmpeg
+    Download-Asset (Get-PinnedAssetUrl $ffmpeg $ffmpeg.assetName) $ffmpegZip $ffmpeg.sha256
     Expand-Archive $ffmpegZip -DestinationPath $ffmpegUnpack -Force
     $ffmpegExe = Get-ChildItem $ffmpegUnpack -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
     if (-not $ffmpegExe) {
@@ -55,23 +52,13 @@ if (-not (Test-Path (Join-Path $FfmpegDir "bin\ffmpeg.exe"))) {
 }
 
 if (-not (Get-ChildItem $MpvDevDir -Recurse -Filter "libmpv.dll.a" -ErrorAction SilentlyContinue)) {
-    $mpvRelease = Invoke-RestMethod "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest"
-    $mpvDevAsset = $mpvRelease.assets |
-        Where-Object { $_.name -match "^mpv-dev-x86_64-.*\.7z$" -and $_.name -notmatch "-v3-" } |
-        Select-Object -First 1
-    $mpvRuntimeAsset = $mpvRelease.assets |
-        Where-Object { $_.name -match "^mpv-x86_64-.*\.7z$" -and $_.name -notmatch "-v3-" } |
-        Select-Object -First 1
-    if (-not $mpvDevAsset -or -not $mpvRuntimeAsset) {
-        throw "No x64 mpv development/runtime assets found"
-    }
-
     $mpvDevArchive = Join-Path $env:TEMP "llstudio-mpv-dev.7z"
     $mpvRuntimeArchive = Join-Path $env:TEMP "llstudio-mpv-runtime.7z"
     Remove-Item $MpvDevDir, $MpvRuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force $MpvDevDir, $MpvRuntimeDir | Out-Null
-    Download-Asset $mpvDevAsset.browser_download_url $mpvDevArchive
-    Download-Asset $mpvRuntimeAsset.browser_download_url $mpvRuntimeArchive
+    $mpv = $dependencies.mpv
+    Download-Asset (Get-PinnedAssetUrl $mpv $mpv.dev.assetName) $mpvDevArchive $mpv.dev.sha256
+    Download-Asset (Get-PinnedAssetUrl $mpv $mpv.runtime.assetName) $mpvRuntimeArchive $mpv.runtime.sha256
     & 7z x $mpvDevArchive "-o$MpvDevDir" -y | Out-Null
     & 7z x $mpvRuntimeArchive "-o$MpvRuntimeDir" -y | Out-Null
 }
