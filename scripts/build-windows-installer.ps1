@@ -103,7 +103,19 @@ cargo clean --release --target $target
 $env:RUSTFLAGS = "-C debuginfo=2"
 cargo build --release -p els-app --target $target
 Copy-Item "target\$target\release\els-app.exe" $dist
-Copy-Item "target\$target\release\els-app.pdb" (Join-Path $projectRoot "els-app.pdb") -Force
+$releaseDir = Join-Path $projectRoot "target\$target\release"
+$symbols = Get-ChildItem $releaseDir -Recurse -Filter "*.pdb" -File |
+    Where-Object {
+        $_.BaseName -in @("els-app", "els_app") -or $_.BaseName -like "els_app-*"
+    } |
+    Select-Object -First 1
+if (-not $symbols) {
+    $availableSymbols = Get-ChildItem $releaseDir -Recurse -Filter "*.pdb" -File -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty FullName
+    $details = if ($availableSymbols) { $availableSymbols -join "`n" } else { "(none)" }
+    throw "MSVC build did not produce an els-app PDB. Available PDB files:`n$details"
+}
+Copy-Item $symbols.FullName (Join-Path $projectRoot "els-app.pdb") -Force
 Copy-Item (Get-ChildItem (Join-Path $FfmpegDir "bin") -Filter "*.dll") $dist -Force
 Copy-Item (Join-Path $FfmpegDir "bin\ffmpeg.exe"), (Join-Path $FfmpegDir "bin\ffprobe.exe") $dist -Force
 

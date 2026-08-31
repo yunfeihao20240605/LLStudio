@@ -187,9 +187,19 @@ jobs:
           cargo build --release -p els-app --target ${{ matrix.target_triple }}
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item target/${{ matrix.target_triple }}/release/els-app.exe dist/
-          $symbols = "target/${{ matrix.target_triple }}/release/els-app.pdb"
-          if (-not (Test-Path $symbols)) { throw "MSVC build did not produce $symbols" }
-          Copy-Item $symbols els-app.pdb -Force
+          $releaseDir = "target/${{ matrix.target_triple }}/release"
+          $symbols = Get-ChildItem $releaseDir -Recurse -Filter "*.pdb" -File |
+            Where-Object {
+              $_.BaseName -in @("els-app", "els_app") -or $_.BaseName -like "els_app-*"
+            } |
+            Select-Object -First 1
+          if (-not $symbols) {
+            $availableSymbols = Get-ChildItem $releaseDir -Recurse -Filter "*.pdb" -File -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty FullName
+            $details = if ($availableSymbols) { $availableSymbols -join "`n" } else { "(none)" }
+            throw "MSVC build did not produce an els-app PDB. Available PDB files:`n$details"
+          }
+          Copy-Item $symbols.FullName els-app.pdb -Force
           Copy-Item -Path @("C:/ffmpeg/bin/*.dll", "C:/ffmpeg/bin/ffmpeg.exe", "C:/ffmpeg/bin/ffprobe.exe") -Destination dist -Force
           foreach ($runtimeDir in @($env:MPV_RUNTIME_DIR, $env:MPV_PREFIX)) {
             Get-ChildItem $runtimeDir -Recurse -Filter *.dll -File -ErrorAction SilentlyContinue |
