@@ -284,7 +284,9 @@ jobs:
           package_root="${artifact_name%.deb}.root"
           rm -rf "$package_root"
           mkdir -p "$package_root"
-          dpkg-deb -x "$artifact_name" "$package_root"
+          # Raw extraction keeps DEBIAN/control, which is required when the
+          # package is rebuilt after adding the bundled Qt runtime.
+          dpkg-deb --raw-extract "$artifact_name" "$package_root"
           # install-qt-action exports Qt6_DIR as the Qt installation prefix
           # (for example .../Qt/6.6.3/gcc_64), not the CMake package folder.
           qt_prefix="$Qt6_DIR"
