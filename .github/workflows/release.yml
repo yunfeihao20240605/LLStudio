@@ -285,7 +285,9 @@ jobs:
           rm -rf "$package_root"
           mkdir -p "$package_root"
           dpkg-deb -x "$artifact_name" "$package_root"
-          qt_prefix="$(cd "$Qt6_DIR/../../../" && pwd)"
+          # install-qt-action exports Qt6_DIR as the Qt installation prefix
+          # (for example .../Qt/6.6.3/gcc_64), not the CMake package folder.
+          qt_prefix="$Qt6_DIR"
           qt_lib_dir="$qt_prefix/lib"
           qt_bundle="$package_root/usr/lib/llstudio"
           test -f "$qt_lib_dir/libQt6Core.so.6"
