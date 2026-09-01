@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+bundle_root=/usr/lib/llstudio
+export LD_LIBRARY_PATH="$bundle_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export QT_PLUGIN_PATH="$bundle_root/plugins"
+export QML2_IMPORT_PATH="$bundle_root/qml"
+
+exec "$bundle_root/bin/els-app" "$@"

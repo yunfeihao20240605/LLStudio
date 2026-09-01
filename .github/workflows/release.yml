@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      linux_only:
+        description: '仅构建并上传 Ubuntu 22.04/24.04 两个 Linux .deb（用于修复版本补发）'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -12,6 +18,7 @@ permissions:
 jobs:
   build:
     name: Build (${{ matrix.os }} - ${{ matrix.target_name }})
+    if: ${{ !inputs.linux_only || startsWith(matrix.target_name, 'linux-') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -270,12 +277,33 @@ jobs:
             readelf -d target/release/els-app | grep -F "libmpv" || true
             exit 1
           fi
-          cargo deb -p els-app --no-build -o "$artifact_name" || \
-            cp target/debian/*.deb "$artifact_name"
-          QT_LIB_DIR="$(find "$Qt6_DIR" -name 'libQt6Core.so.6' -print -quit 2>/dev/null | xargs -r dirname)"
-          if [ -n "$QT_LIB_DIR" ]; then
-            export LD_LIBRARY_PATH="$QT_LIB_DIR:${LD_LIBRARY_PATH:-}"
-          fi
+          cargo deb -p els-app --no-build -o "$artifact_name"
+
+          # The application is compiled with the Qt installer (6.6.3), while
+          # Ubuntu 22.04 may provide an older system Qt. Bundle the Qt runtime
+          # and QML/plugin tree so the package does not depend on the host Qt
+          # minor version. System libraries such as mpv and FFmpeg remain APT
+          # dependencies declared in Cargo.toml.
+          package_root="${artifact_name%.deb}.root"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          dpkg-deb -x "$artifact_name" "$package_root"
+          qt_prefix="$(cd "$Qt6_DIR/../../../" && pwd)"
+          qt_lib_dir="$qt_prefix/lib"
+          qt_bundle="$package_root/usr/lib/llstudio"
+          test -f "$qt_lib_dir/libQt6Core.so.6"
+          test -d "$qt_prefix/qml"
+          test -d "$qt_prefix/plugins"
+          mkdir -p "$qt_bundle/lib"
+          find "$qt_lib_dir" -maxdepth 1 \( -type f -o -type l \) -name 'lib*.so*' -exec cp -a {} "$qt_bundle/lib/" \;
+          cp -a "$qt_prefix/qml" "$qt_bundle/"
+          cp -a "$qt_prefix/plugins" "$qt_bundle/"
+          test -f "$qt_bundle/lib/libQt6Core.so.6"
+          test -f "$qt_bundle/lib/libQt6Qml.so.6"
+          test -f "$qt_bundle/lib/libQt6Quick.so.6"
+          dpkg-deb --build --root-owner-group "$package_root" "$artifact_name.bundled"
+          mv "$artifact_name.bundled" "$artifact_name"
+          rm -rf "$package_root"
           bash scripts/validate-debian-package.sh \
             "$artifact_name" "$expected_mpv_package" "$expected_mpv_soname"
 

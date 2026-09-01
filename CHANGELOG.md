@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - 修复 Linux `.deb` 发布时因 CI 中 Qt 库不是 APT 包而导致自动依赖分析失败的问题
 - 显式声明 mpv 运行库依赖，让 Ubuntu 22.04 和 Ubuntu 24.04 使用对应的 `libmpv1` 或 `libmpv2`
+- 将 Qt 6.6.3 运行库、QML 模块和插件随 Linux `.deb` 一起打包，避免加载系统旧版 Qt
 
 ### 发布说明 (Release Notes)
 

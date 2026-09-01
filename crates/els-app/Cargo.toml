@@ -34,7 +34,9 @@ extended-description = "English Learning Studio - An advanced desktop applicatio
 section = "utility"
 priority = "optional"
 assets = [
-    ["target/release/els-app", "usr/bin/llstudio", "755"],
+    ["target/release/els-app", "usr/lib/llstudio/bin/els-app", "755"],
+    ["../../resources/linux/llstudio-launcher", "usr/bin/llstudio", "755"],
+    ["../../resources/linux/qt.conf", "usr/lib/llstudio/bin/qt.conf", "644"],
     ["../../resources/linux/llstudio.desktop", "usr/share/applications/llstudio.desktop", "644"],
     ["../../resources/icons/linux/16x16/english-learning-studio.png", "usr/share/icons/hicolor/16x16/apps/english-learning-studio.png", "644"],
     ["../../resources/icons/linux/32x32/english-learning-studio.png", "usr/share/icons/hicolor/32x32/apps/english-learning-studio.png", "644"],
