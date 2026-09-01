@@ -260,6 +260,10 @@ jobs:
           # the rebuilt Debian archive are being created.
           find target/release -mindepth 1 -maxdepth 1 ! -name els-app \
             -exec rm -rf -- {} +
+          sudo apt-get clean
+          rm -rf "$CARGO_HOME/registry/cache" "$CARGO_HOME/git/checkouts" \
+            "$CARGO_HOME/git/db"
+          df -h "$GITHUB_WORKSPACE"
           artifact_name="${{ steps.package.outputs.artifact_name }}"
           case "${{ matrix.target_name }}" in
             linux-ubuntu22.04)
@@ -371,6 +375,8 @@ jobs:
           test -f "$qt_bundle/lib/libQt6Core.so.6"
           test -f "$qt_bundle/lib/libQt6Qml.so.6"
           test -f "$qt_bundle/lib/libQt6Quick.so.6"
+          du -sh "$package_root" "$qt_bundle" "$qt_prefix" || true
+          df -h "$GITHUB_WORKSPACE"
           # gzip uses much less memory than the runner's default compressor
           # while remaining supported by Ubuntu 22.04 and 24.04.
           dpkg-deb --build --root-owner-group -Z gzip -z 1 \
