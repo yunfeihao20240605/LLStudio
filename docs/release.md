@@ -154,6 +154,11 @@ git push origin v0.2.0
 
 推送 `v0.2.0` 后，`.github/workflows/release.yml` 会自动启动发布流程。
 
+如果只是修复已经存在版本的 Linux 安装包，可手动运行工作流，填写原版本标签
+（例如 `release_tag=v0.4.2`），并将 `linux_only` 设置为 `true`。这只会构建 Ubuntu
+22.04 和 Ubuntu 24.04 两个 `.deb`；正常推送后续版本标签（例如 `v0.4.3`）时不设置
+这些选项，仍会发布全部平台安装包。
+
 ## 自动构建内容
 
 工作流会构建以下平台：

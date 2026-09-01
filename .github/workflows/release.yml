@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: '要更新的 Release 标签，例如 v0.4.2（仅手动补发时填写）'
+        required: false
+        type: string
       linux_only:
         description: '仅构建并上传 Ubuntu 22.04/24.04 两个 Linux .deb（用于修复版本补发）'
         required: false
@@ -50,6 +54,8 @@ jobs:
       - name: Resolve release version and package name
         id: package
         shell: pwsh
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
         run: |
           $metadataJson = & cargo metadata --no-deps --format-version 1
           if ($LASTEXITCODE -ne 0) {
@@ -61,8 +67,12 @@ jobs:
             throw "Unable to determine a valid els-app version from Cargo metadata"
           }
           $version = $package.version
-          if ($env:GITHUB_REF_TYPE -eq "tag") {
-            $tagVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          $releaseTag = if ($env:RELEASE_TAG_INPUT) { $env:RELEASE_TAG_INPUT } else { $env:GITHUB_REF_NAME }
+          if ($releaseTag) {
+            if ($releaseTag -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+              throw "Invalid release tag: $releaseTag"
+            }
+            $tagVersion = $releaseTag -replace '^v', ''
             if ($tagVersion -ne $version) {
               throw "Git tag version $tagVersion does not match Cargo version $version"
             }
@@ -77,6 +87,7 @@ jobs:
           }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "artifact_name=$artifactName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Add Rust target
         if: matrix.target_triple
@@ -353,10 +364,10 @@ jobs:
       # 提取 CHANGELOG 对应版本段落
       # ----------------------------------------------------
       - name: Extract Changelog for this release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         shell: bash
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
+          TAG="${{ steps.package.outputs.release_tag }}"
           # Extract the section between ## [$TAG] and the next ## [, exclusive
           awk -v tag="$TAG" '
             index($0, "## [" tag "]") == 1 { found=1; next }
@@ -373,15 +384,16 @@ jobs:
       # ----------------------------------------------------
       - name: Release Artifacts
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         with:
           files: ${{ steps.package.outputs.artifact_name }}
+          tag_name: ${{ steps.package.outputs.release_tag }}
           body_path: RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows symbols
-        if: matrix.target_name == 'windows-msvc' && startsWith(github.ref, 'refs/tags/')
+        if: matrix.target_name == 'windows-msvc' && (startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
         uses: actions/upload-artifact@v4
         with:
           name: LLStudio-${{ matrix.target_name }}-symbols-${{ github.sha }}
