@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.4.2] - 2026-09-01
+
+### 修复 (Bug Fixes)
+
+- 修复 Linux `.deb` 发布时因 CI 中 Qt 库不是 APT 包而导致自动依赖分析失败的问题
+- 显式声明 mpv 运行库依赖，让 Ubuntu 22.04 和 Ubuntu 24.04 使用对应的 `libmpv1` 或 `libmpv2`
+
+### 发布说明 (Release Notes)
+
+- 本版本修复 Linux 安装包构建失败问题，其他平台构建流程保持不变
+
 ## [v0.4.1] - 2026-09-01
 
 ### 新增 (Features)

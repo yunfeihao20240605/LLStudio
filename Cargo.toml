@@ -22,7 +22,7 @@ members = [
 # 依赖版本在真正实现各 crate 时再固定（例如 cxx-qt、rusqlite 等）。
 # 本文件仅搭建 workspace 骨架，用于验证 crate 划分与依赖方向是否正确。
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 
 [workspace.dependencies]

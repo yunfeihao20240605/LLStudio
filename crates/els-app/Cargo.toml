@@ -44,11 +44,13 @@ assets = [
     ["../../resources/icons/linux/256x256/english-learning-studio.png", "usr/share/icons/hicolor/256x256/apps/english-learning-studio.png", "644"],
     ["../../resources/icons/linux/512x512/english-learning-studio.png", "usr/share/icons/hicolor/512x512/apps/english-learning-studio.png", "644"],
 ]
-# Keep the package installable on Debian/Ubuntu while retaining cargo-deb's
-# automatic ELF dependency discovery for the Qt libraries.
+# Keep the package installable on Debian/Ubuntu. The Qt libraries used by the
+# CI build come from the Qt installer rather than an APT package, so cargo-deb
+# cannot safely infer them with $auto. Declare the runtime packages explicitly
+# and let APT select the matching mpv package for the target distribution.
 depends = [
-    "$auto",
     "ffmpeg",
+    "libmpv2 | libmpv1",
     "libqt6core6",
     "libqt6gui6",
     "libqt6network6",
