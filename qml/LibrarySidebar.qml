@@ -150,9 +150,9 @@ Rectangle {
                         disabledTextColor: root.textSecondary
                         accentColor: root.accent
                         accentBackgroundColor: root.accentBg
-                        onClicked: panelMenu.open()
+                        onClicked: root.hideRequested()
                         ToolTip.visible: hovered
-                        ToolTip.text: "学习库显示选项"
+                        ToolTip.text: "隐藏学习库"
                     }
                 }
 
@@ -877,20 +877,4 @@ Rectangle {
         }
     }
 
-    ThemedMenu {
-        id: panelMenu
-        panelColor: root.elevatedBg
-        borderColor: root.borderColor
-        textColor: root.textPrimary
-        disabledTextColor: root.textSecondary
-        hoverColor: root.accentBg
-
-        ThemedMenuItem {
-            text: "隐藏学习库"
-            textColor: root.textPrimary
-            disabledTextColor: root.textSecondary
-            hoverColor: root.accentBg
-            onTriggered: root.hideRequested()
-        }
-    }
 }

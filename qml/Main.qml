@@ -74,8 +74,8 @@ ApplicationWindow {
 
     function applyCompactLayout() {
         layoutMode = "compact"
-        libraryPanelExpanded = true
-        detailsPanelExpanded = true
+        libraryPanelExpanded = false
+        detailsPanelExpanded = false
         waveformOnRight = true
         saveLayoutSettings()
     }
@@ -989,6 +989,41 @@ ApplicationWindow {
             }
         }
         Platform.Menu {
+            title: "播放"
+            Platform.MenuItem { text: "播放/暂停"; onTriggered: root.toggleNormalPlayback() }
+            Platform.MenuItem { text: "开始训练"; onTriggered: root.toggleTrainingPlayback() }
+        }
+        Platform.Menu {
+            title: "麦克风"
+            Platform.Menu {
+                title: "录音降噪"
+                enabled: recordingBridge.hasRecording
+                         && !recordingBridge.isRecording
+                         && !recordingBridge.isProcessing
+                Platform.MenuItem {
+                    text: "轻度"
+                    onTriggered: root.processRecordingNoiseReduction("light")
+                }
+                Platform.MenuItem {
+                    text: "标准"
+                    onTriggered: root.processRecordingNoiseReduction("standard")
+                }
+                Platform.MenuItem {
+                    text: "强力"
+                    onTriggered: root.processRecordingNoiseReduction("strong")
+                }
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: "使用原始录音"
+                enabled: recordingBridge.hasRecording
+                         && !recordingBridge.isRecording
+                         && !recordingBridge.isProcessing
+                         && recordingBridge.activeRecordingVariant !== "original"
+                onTriggered: root.useOriginalRecording()
+            }
+        }
+        Platform.Menu {
             title: "布局"
             Platform.MenuItem {
                 text: "标准布局"
@@ -1039,41 +1074,6 @@ ApplicationWindow {
                         onTriggered: root.setWaveformOnRight(true)
                     }
                 }
-            }
-        }
-        Platform.Menu {
-            title: "播放"
-            Platform.MenuItem { text: "播放/暂停"; onTriggered: root.toggleNormalPlayback() }
-            Platform.MenuItem { text: "开始训练"; onTriggered: root.toggleTrainingPlayback() }
-        }
-        Platform.Menu {
-            title: "麦克风"
-            Platform.Menu {
-                title: "录音降噪"
-                enabled: recordingBridge.hasRecording
-                         && !recordingBridge.isRecording
-                         && !recordingBridge.isProcessing
-                Platform.MenuItem {
-                    text: "轻度"
-                    onTriggered: root.processRecordingNoiseReduction("light")
-                }
-                Platform.MenuItem {
-                    text: "标准"
-                    onTriggered: root.processRecordingNoiseReduction("standard")
-                }
-                Platform.MenuItem {
-                    text: "强力"
-                    onTriggered: root.processRecordingNoiseReduction("strong")
-                }
-            }
-            Platform.MenuSeparator {}
-            Platform.MenuItem {
-                text: "使用原始录音"
-                enabled: recordingBridge.hasRecording
-                         && !recordingBridge.isRecording
-                         && !recordingBridge.isProcessing
-                         && recordingBridge.activeRecordingVariant !== "original"
-                onTriggered: root.useOriginalRecording()
             }
         }
         Platform.Menu {
@@ -1450,7 +1450,8 @@ ApplicationWindow {
         z: 100
         anchors.left: parent.left
         anchors.leftMargin: 4
-        anchors.verticalCenter: mainContent.verticalCenter
+        anchors.top: mainContent.top
+        anchors.topMargin: 26
         width: 32
         height: 38
         text: "≡"
@@ -1480,7 +1481,8 @@ ApplicationWindow {
         z: 100
         anchors.right: parent.right
         anchors.rightMargin: 4
-        anchors.verticalCenter: mainContent.verticalCenter
+        anchors.top: mainContent.top
+        anchors.topMargin: 14
         width: 32
         height: 38
         text: "≡"

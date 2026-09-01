@@ -308,9 +308,9 @@ Rectangle {
                 disabledTextColor: root.textSecondary
                 accentColor: root.accent
                 accentBackgroundColor: root.accentBg
-                onClicked: panelMenu.open()
+                onClicked: root.hidePanelRequested()
                 ToolTip.visible: hovered
-                ToolTip.text: "字幕面板显示选项"
+                ToolTip.text: "隐藏字幕面板"
             }
         }
 
@@ -538,20 +538,4 @@ Rectangle {
         }
     }
 
-    ThemedMenu {
-        id: panelMenu
-        panelColor: root.elevatedBg
-        borderColor: root.borderColor
-        textColor: root.textPrimary
-        disabledTextColor: root.textSecondary
-        hoverColor: root.accentBg
-
-        ThemedMenuItem {
-            text: "隐藏字幕面板"
-            textColor: root.textPrimary
-            disabledTextColor: root.textSecondary
-            hoverColor: root.accentBg
-            onTriggered: root.hidePanelRequested()
-        }
-    }
 }
