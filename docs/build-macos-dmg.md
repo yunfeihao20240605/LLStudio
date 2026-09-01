@@ -18,4 +18,4 @@ chmod +x scripts/build-macos-dmg.sh
 QT_PREFIX=/path/to/Qt/6.6.3/macos ./scripts/build-macos-dmg.sh
 ```
 
-输出文件位于 `dist/LLStudio-macOS-arm64.dmg` 或 `dist/LLStudio-macOS-x86_64.dmg`。
+输出文件位于 `dist/LLStudio-macOS-arm64-<version>.dmg` 或 `dist/LLStudio-macOS-x86_64-<version>.dmg`，版本号由 Cargo workspace 自动读取。

@@ -144,4 +144,8 @@ if (-not $nsis) {
 
 & (Join-Path $projectRoot "scripts\validate-windows-package.ps1") -Dist $dist
 & $nsis.Source "/DPRODUCT_VERSION=$productVersion" (Join-Path $projectRoot "installer.nsi")
-Write-Host "Built: $(Join-Path $projectRoot 'LLStudio-Setup.exe')"
+$installerPath = Join-Path $projectRoot "LLStudio-Setup-$productVersion.exe"
+if (-not (Test-Path $installerPath)) {
+    throw "NSIS did not produce $installerPath"
+}
+Write-Host "Built: $installerPath"

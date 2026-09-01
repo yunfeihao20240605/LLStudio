@@ -158,10 +158,10 @@ git push origin v0.2.0
 
 工作流会构建以下平台：
 
-- Windows x64：`LLStudio-Setup.exe`
-- Linux x64：`LLStudio_amd64.deb`
-- macOS Apple Silicon：`LLStudio-macOS-arm64.dmg`
-- macOS Intel：`LLStudio-macOS-x86_64.dmg`
+- Windows x64：`LLStudio-Setup-<version>.exe`
+- Linux x64：`english-learning-studio_<version>_amd64.deb`
+- macOS Apple Silicon：`LLStudio-macOS-arm64-<version>.dmg`
+- macOS Intel：`LLStudio-macOS-x86_64-<version>.dmg`
 
 构建流程包括：
 

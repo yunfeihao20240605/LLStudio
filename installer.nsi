@@ -38,7 +38,7 @@ Icon "resources\icons\windows\LLStudio.ico"
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "LLStudio-Setup.exe"
+OutFile "LLStudio-Setup-${PRODUCT_VERSION}.exe"
 InstallDir "$PROGRAMFILES64\LLStudio"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show

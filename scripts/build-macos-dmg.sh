@@ -12,6 +12,9 @@ die() {
 command -v brew >/dev/null 2>&1 || die "Homebrew is required"
 command -v cargo >/dev/null 2>&1 || die "Rust/Cargo is required"
 
+version="$(cargo pkgid -p els-app | sed 's/.*#//')"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || die "unable to determine a valid els-app version"
+
 arch="$(uname -m)"
 case "$arch" in
   arm64)
@@ -78,7 +81,7 @@ fi
 
 dist="$project_root/dist"
 app_bundle="$dist/LLStudio.app"
-dmg="$dist/LLStudio-macOS-$arch.dmg"
+dmg="$dist/LLStudio-macOS-$arch-$version.dmg"
 rm -rf "$dist"
 mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources"
 
