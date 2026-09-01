@@ -352,11 +352,21 @@ ApplicationWindow {
         var text = value.toString()
         if (text.indexOf("file://") === 0) {
             try {
-                return decodeURIComponent(text.substring(7))
+                text = decodeURIComponent(text.substring(7))
             } catch (error) {
-                return text.substring(7)
+                text = text.substring(7)
             }
         }
+
+        // Qt may return file:///C:/... on Windows. Removing only the
+        // file:// prefix leaves /C:/..., which Windows resolves as C:/C:/...
+        if (Qt.platform.os === "windows"
+                && text.length >= 4
+                && text.charAt(0) === "/"
+                && text.charAt(2) === ":"
+                && (text.charAt(3) === "/" || text.charAt(3) === "\\"))
+            text = text.substring(1)
+
         return text
     }
 

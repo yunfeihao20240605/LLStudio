@@ -379,11 +379,28 @@ fn normalize_video_path(path: &str) -> PathBuf {
     // this fallback here as well as in QML so the media backend never sees a
     // path such as `/file:///Users/...`.
     let local_path = trimmed.strip_prefix("file://").unwrap_or(trimmed);
+    #[cfg(target_os = "windows")]
+    let local_path = strip_windows_drive_leading_slash(local_path);
     let candidate = PathBuf::from(local_path);
     if candidate.is_absolute() {
         candidate
     } else {
         resolve_video_path(local_path)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn strip_windows_drive_leading_slash(path: &str) -> &str {
+    let bytes = path.as_bytes();
+    if bytes.len() >= 4
+        && bytes[0] == b'/'
+        && bytes[1].is_ascii_alphabetic()
+        && bytes[2] == b':'
+        && (bytes[3] == b'/' || bytes[3] == b'\\')
+    {
+        &path[1..]
+    } else {
+        path
     }
 }
 

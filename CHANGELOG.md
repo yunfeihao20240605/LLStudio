@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.3.4] - 2026-09-01
+
+### 修复 (Bug Fixes)
+
+- 修复 Windows 下选择视频后路径被错误转换为 `C:/C:/...`，导致媒体加载失败的问题
+- 增强文件 URL 到本地路径的跨平台转换，保持 macOS 和 Linux 原有路径行为
+
+### 发布说明 (Release Notes)
+
+- 本版本修复 Windows 视频文件选择后的媒体加载问题
+
 ## [v0.3.3] - 2026-09-01
 
 ### 修复 (Bug Fixes)
