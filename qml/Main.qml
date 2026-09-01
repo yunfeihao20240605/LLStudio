@@ -25,6 +25,36 @@ ApplicationWindow {
     property int selectionAdjustmentCueIndex: -1
     property real selectionAdjustmentOriginalStart: 0
     property real selectionAdjustmentOriginalEnd: 0
+    property bool libraryPanelExpanded: themeBridge.libraryPanelExpanded
+    property bool detailsPanelExpanded: themeBridge.detailsPanelExpanded
+    property bool waveformOnRight: themeBridge.waveformOnRight
+
+    function saveLayoutSettings() {
+        return themeBridge.saveLayoutSettings(libraryPanelExpanded,
+                                               detailsPanelExpanded,
+                                               waveformOnRight)
+    }
+
+    function setLibraryPanelExpanded(expanded) {
+        if (libraryPanelExpanded === expanded)
+            return
+        libraryPanelExpanded = expanded
+        saveLayoutSettings()
+    }
+
+    function setDetailsPanelExpanded(expanded) {
+        if (detailsPanelExpanded === expanded)
+            return
+        detailsPanelExpanded = expanded
+        saveLayoutSettings()
+    }
+
+    function setWaveformOnRight(onRight) {
+        if (waveformOnRight === onRight)
+            return
+        waveformOnRight = onRight
+        saveLayoutSettings()
+    }
 
     function setVideoFullScreen(enabled) {
         if (videoFullScreen === enabled)
@@ -568,8 +598,10 @@ ApplicationWindow {
     height: 920
     visible: true
     visibility: Window.Maximized
-    minimumWidth: 1220
-    minimumHeight: 760
+    // Allow the user-selected compact layout to fit on 1024x768 displays.
+    // The large-screen layout keeps its existing preferred dimensions.
+    minimumWidth: 800
+    minimumHeight: 600
     title: "LLStudio"
 
     onClosing: root.savePlaybackProgress()
@@ -933,9 +965,41 @@ ApplicationWindow {
             }
         }
         Platform.Menu {
-            title: "编辑"
-            type: Platform.Menu.EditMenu
-            Platform.MenuItem { text: "查找"; shortcut: StandardKey.Find }
+            title: "布局"
+            Platform.MenuItem {
+                text: root.libraryPanelExpanded
+                      ? "隐藏学习库与学习控制"
+                      : "显示学习库与学习控制"
+                checkable: true
+                checked: root.libraryPanelExpanded
+                onTriggered: root.setLibraryPanelExpanded(
+                                 !root.libraryPanelExpanded)
+            }
+            Platform.MenuItem {
+                text: root.detailsPanelExpanded
+                      ? "隐藏字幕、笔记、AI 与学习片段"
+                      : "显示字幕、笔记、AI 与学习片段"
+                checkable: true
+                checked: root.detailsPanelExpanded
+                onTriggered: root.setDetailsPanelExpanded(
+                                 !root.detailsPanelExpanded)
+            }
+            Platform.MenuSeparator {}
+            Platform.Menu {
+                title: "波形位置"
+                Platform.MenuItem {
+                    text: "视频下方"
+                    checkable: true
+                    checked: !root.waveformOnRight
+                    onTriggered: root.setWaveformOnRight(false)
+                }
+                Platform.MenuItem {
+                    text: "视频右侧"
+                    checkable: true
+                    checked: root.waveformOnRight
+                    onTriggered: root.setWaveformOnRight(true)
+                }
+            }
         }
         Platform.Menu {
             title: "播放"
@@ -1015,10 +1079,10 @@ ApplicationWindow {
 
             LibrarySidebar {
                 id: librarySidebar
-                visible: !root.videoFullScreen
-                SplitView.minimumWidth: 240
-                SplitView.preferredWidth: 290
-                SplitView.maximumWidth: 360
+                visible: !root.videoFullScreen && root.libraryPanelExpanded
+                SplitView.minimumWidth: root.libraryPanelExpanded ? 240 : 0
+                SplitView.preferredWidth: root.libraryPanelExpanded ? 290 : 0
+                SplitView.maximumWidth: root.libraryPanelExpanded ? 360 : 0
                 Layout.fillHeight: true
                 segmentBridge: segmentBridge
                 libraryBridge: libraryBridge
@@ -1056,10 +1120,12 @@ ApplicationWindow {
             SplitView {
                 id: playbackWorkspace
                 SplitView.fillWidth: true
-                SplitView.minimumWidth: 620
-                orientation: Qt.Vertical
+                SplitView.minimumWidth: root.waveformOnRight ? 720 : 620
+                orientation: root.waveformOnRight
+                             ? Qt.Horizontal : Qt.Vertical
                 handle: ThemedSplitHandle {
-                    splitOrientation: Qt.Vertical
+                    splitOrientation: root.waveformOnRight
+                                      ? Qt.Horizontal : Qt.Vertical
                     gapColor: theme.windowBg
                     dividerColor: theme.border
                     accentColor: theme.accent
@@ -1067,9 +1133,20 @@ ApplicationWindow {
 
                 VideoPlaybackPane {
                     id: videoPlaybackPane
-                    SplitView.minimumHeight: 340
-                    SplitView.preferredHeight: Math.max(
-                                340, Math.round(playbackWorkspace.height * 0.6))
+                    SplitView.minimumWidth: root.waveformOnRight ? 440 : 0
+                    SplitView.preferredWidth: root.waveformOnRight
+                                              ? Math.max(
+                                                    440,
+                                                    Math.round(
+                                                        playbackWorkspace.width
+                                                        * 0.62)) : 0
+                    SplitView.minimumHeight: root.waveformOnRight ? 0 : 340
+                    SplitView.preferredHeight: root.waveformOnRight
+                                               ? 0 : Math.max(
+                                                     340,
+                                                     Math.round(
+                                                         playbackWorkspace.height
+                                                         * 0.6))
                     SplitView.fillHeight: root.videoFullScreen
                     fullScreenMode: root.videoFullScreen
                     darkTheme: theme.darkAppearance
@@ -1126,8 +1203,18 @@ ApplicationWindow {
 
                 WaveformView {
                     visible: !root.videoFullScreen
-                    SplitView.minimumHeight: 240
-                    SplitView.preferredHeight: recordingBridge.hasRecording ? 380 : 290
+                    SplitView.minimumWidth: root.waveformOnRight ? 260 : 0
+                    SplitView.preferredWidth: root.waveformOnRight
+                                              ? Math.max(
+                                                    260,
+                                                    Math.round(
+                                                        playbackWorkspace.width
+                                                        * 0.38)) : 0
+                    SplitView.minimumHeight: root.waveformOnRight ? 0 : 240
+                    SplitView.preferredHeight: root.waveformOnRight
+                                               ? 0 : (recordingBridge.hasRecording
+                                                      ? 380 : 290)
+                    SplitView.fillWidth: root.waveformOnRight
                     SplitView.fillHeight: !root.videoFullScreen
                     subtitleBridge: subtitleBridge
                     waveformBridge: waveformBridge
@@ -1209,10 +1296,10 @@ ApplicationWindow {
 
             SplitView {
                 id: learningDetailsPanel
-                visible: !root.videoFullScreen
-                SplitView.minimumWidth: 280
-                SplitView.preferredWidth: 330
-                SplitView.maximumWidth: 420
+                visible: !root.videoFullScreen && root.detailsPanelExpanded
+                SplitView.minimumWidth: root.detailsPanelExpanded ? 280 : 0
+                SplitView.preferredWidth: root.detailsPanelExpanded ? 330 : 0
+                SplitView.maximumWidth: root.detailsPanelExpanded ? 420 : 0
                 orientation: Qt.Vertical
                 handle: ThemedSplitHandle {
                     splitOrientation: Qt.Vertical

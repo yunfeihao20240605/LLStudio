@@ -27,6 +27,9 @@ pub mod qobject {
         #[qml_element]
         #[qproperty(QString, theme_mode, cxx_name = "themeMode")]
         #[qproperty(QString, last_error, cxx_name = "lastError")]
+        #[qproperty(bool, library_panel_expanded, cxx_name = "libraryPanelExpanded")]
+        #[qproperty(bool, details_panel_expanded, cxx_name = "detailsPanelExpanded")]
+        #[qproperty(bool, waveform_on_right, cxx_name = "waveformOnRight")]
         type ThemeBridge = super::ThemeBridgeRust;
 
         #[qinvokable]
@@ -40,12 +43,24 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "reportError"]
         fn report_error(self: Pin<&mut ThemeBridge>, message: &QString) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "saveLayoutSettings"]
+        fn save_layout_settings(
+            self: Pin<&mut ThemeBridge>,
+            library_panel_expanded: bool,
+            details_panel_expanded: bool,
+            waveform_on_right: bool,
+        ) -> bool;
     }
 }
 
 pub struct ThemeBridgeRust {
     theme_mode: QString,
     last_error: QString,
+    library_panel_expanded: bool,
+    details_panel_expanded: bool,
+    waveform_on_right: bool,
     settings: els_storage::SettingsStore,
 }
 
@@ -84,9 +99,25 @@ impl Default for ThemeBridgeRust {
             }
         };
 
+        let library_panel_expanded = read_bool_setting(
+            &settings,
+            els_storage::LAYOUT_LIBRARY_PANEL_EXPANDED_KEY,
+            true,
+        );
+        let details_panel_expanded = read_bool_setting(
+            &settings,
+            els_storage::LAYOUT_DETAILS_PANEL_EXPANDED_KEY,
+            true,
+        );
+        let waveform_on_right =
+            read_bool_setting(&settings, els_storage::LAYOUT_WAVEFORM_ON_RIGHT_KEY, false);
+
         Self {
             theme_mode: QString::from(&theme_mode),
             last_error: QString::from(&last_error),
+            library_panel_expanded,
+            details_panel_expanded,
+            waveform_on_right,
             settings,
         }
     }
@@ -135,6 +166,60 @@ impl qobject::ThemeBridge {
         self.as_mut()
             .set_last_error(QString::from(message.to_string()));
         true
+    }
+
+    fn save_layout_settings(
+        mut self: Pin<&mut Self>,
+        library_panel_expanded: bool,
+        details_panel_expanded: bool,
+        waveform_on_right: bool,
+    ) -> bool {
+        let persist_result = {
+            let mut rust = self.as_mut().rust_mut();
+            rust.settings
+                .set(
+                    els_storage::LAYOUT_LIBRARY_PANEL_EXPANDED_KEY,
+                    if library_panel_expanded {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )
+                .and_then(|_| {
+                    rust.settings.set(
+                        els_storage::LAYOUT_DETAILS_PANEL_EXPANDED_KEY,
+                        if details_panel_expanded {
+                            "true"
+                        } else {
+                            "false"
+                        },
+                    )
+                })
+                .and_then(|_| {
+                    rust.settings.set(
+                        els_storage::LAYOUT_WAVEFORM_ON_RIGHT_KEY,
+                        if waveform_on_right { "true" } else { "false" },
+                    )
+                })
+        };
+
+        match persist_result {
+            Ok(()) => true,
+            Err(err) => {
+                let error = format!("Failed to persist layout settings: {err}");
+                eprintln!("{error}");
+                self.as_mut().set_last_error(QString::from(&error));
+                false
+            }
+        }
+    }
+}
+
+fn read_bool_setting(settings: &els_storage::SettingsStore, key: &str, default: bool) -> bool {
+    match settings.get(key).ok().flatten().as_deref() {
+        Some("true") | Some("1") => true,
+        Some("false") | Some("0") => false,
+        _ => default,
     }
 }
 
