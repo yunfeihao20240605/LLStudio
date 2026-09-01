@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.3.3] - 2026-09-01
+
+### 修复 (Bug Fixes)
+
+- 修复 Windows 和 Linux 下“打开视频”不弹出文件选择窗口的问题
+- 视频文件选择统一使用跨平台的 Qt `Platform.FileDialog`
+- 隐藏尚未实现的“导入字幕”菜单项，避免点击后无响应
+
+### 发布说明 (Release Notes)
+
+- 本版本完善 Windows、macOS 和 Linux 的视频文件选择流程，并暂时隐藏未完成的字幕导入入口
+
 ## [v0.3.2] - 2026-08-31
 
 ### 优化 (Improvements)
