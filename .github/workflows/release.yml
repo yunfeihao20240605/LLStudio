@@ -295,10 +295,69 @@ jobs:
           test -f "$qt_lib_dir/libQt6Core.so.6"
           test -d "$qt_prefix/qml"
           test -d "$qt_prefix/plugins"
-          mkdir -p "$qt_bundle/lib"
-          find "$qt_lib_dir" -maxdepth 1 \( -type f -o -type l \) -name 'lib*.so*' -exec cp -a {} "$qt_bundle/lib/" \;
-          cp -a "$qt_prefix/qml" "$qt_bundle/"
-          cp -a "$qt_prefix/plugins" "$qt_bundle/"
+          mkdir -p "$qt_bundle/lib" "$qt_bundle/qml" "$qt_bundle/plugins"
+
+          # Keep the Linux package small enough for dpkg-deb and avoid
+          # copying unrelated Qt SDK libraries. Copy a complete symlink group
+          # whenever a bundled object depends on a Qt installer library.
+          copy_qt_library_group() {
+            local source="$1"
+            local filename="$(basename "$source")"
+            local stem="${filename%%.so*}"
+            local candidate
+            for candidate in "$qt_lib_dir/${stem}.so"*; do
+              if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+                cp -a "$candidate" "$qt_bundle/lib/"
+              fi
+            done
+          }
+
+          copy_qt_dependencies() {
+            local object="$1"
+            local dependency_path
+            while IFS= read -r dependency_path; do
+              case "$dependency_path" in
+                "$qt_lib_dir"/*) copy_qt_library_group "$dependency_path" ;;
+              esac
+            done < <(
+              LD_LIBRARY_PATH="$qt_lib_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+                ldd "$object" 2>/dev/null |
+                awk '/=>/ && $3 ~ /^\// {print $3} /^[[:space:]]+\// {print $1}'
+            )
+          }
+
+          copy_qt_dependencies target/release/els-app
+
+          for qml_module in QtQml QtQuick Qt; do
+            if [ -d "$qt_prefix/qml/$qml_module" ]; then
+              cp -a "$qt_prefix/qml/$qml_module" "$qt_bundle/qml/"
+            fi
+          done
+
+          for plugin_group in \
+            platforms \
+            xcbglintegrations \
+            platformthemes \
+            imageformats \
+            iconengines \
+            tls \
+            networkinformation \
+            generic \
+            wayland-shell-integration \
+            egldeviceintegrations; do
+            if [ -d "$qt_prefix/plugins/$plugin_group" ]; then
+              cp -a "$qt_prefix/plugins/$plugin_group" "$qt_bundle/plugins/"
+            fi
+          done
+
+          # QML and platform plugins can have additional Qt installer
+          # dependencies (for example ICU). Include those transitively.
+          while IFS= read -r -d '' qt_object; do
+            copy_qt_dependencies "$qt_object"
+          done < <(
+            find "$qt_bundle/qml" "$qt_bundle/plugins" -type f -name '*.so*' -print0
+          )
+
           test -f "$qt_bundle/lib/libQt6Core.so.6"
           test -f "$qt_bundle/lib/libQt6Qml.so.6"
           test -f "$qt_bundle/lib/libQt6Quick.so.6"
