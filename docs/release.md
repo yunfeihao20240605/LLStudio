@@ -159,7 +159,8 @@ git push origin v0.2.0
 工作流会构建以下平台：
 
 - Windows x64：`LLStudio-Setup-<version>.exe`
-- Linux x64：`english-learning-studio_<version>_amd64.deb`
+- Ubuntu 22.04 x64：`LLStudio_<version>_ubuntu22.04_amd64.deb`（依赖 `libmpv1`）
+- Ubuntu 24.04 x64：`LLStudio_<version>_ubuntu24.04_amd64.deb`（依赖 `libmpv2`）
 - macOS Apple Silicon：`LLStudio-macOS-arm64-<version>.dmg`
 - macOS Intel：`LLStudio-macOS-x86_64-<version>.dmg`
 

@@ -26,7 +26,7 @@ cxx-qt-build.workspace = true
 winresource = "0.1"
 
 [package.metadata.deb]
-name = "english-learning-studio"
+name = "llstudio"
 maintainer = "yunfeihao20240605 <yfhao@example.com>"
 copyright = "2026, yunfeihao20240605"
 license-file = ["../../LICENSE"]
@@ -34,8 +34,8 @@ extended-description = "English Learning Studio - An advanced desktop applicatio
 section = "utility"
 priority = "optional"
 assets = [
-    ["target/release/els-app", "usr/bin/els-app", "755"],
-    ["../../resources/linux/english-learning-studio.desktop", "usr/share/applications/english-learning-studio.desktop", "644"],
+    ["target/release/els-app", "usr/bin/llstudio", "755"],
+    ["../../resources/linux/llstudio.desktop", "usr/share/applications/llstudio.desktop", "644"],
     ["../../resources/icons/linux/16x16/english-learning-studio.png", "usr/share/icons/hicolor/16x16/apps/english-learning-studio.png", "644"],
     ["../../resources/icons/linux/32x32/english-learning-studio.png", "usr/share/icons/hicolor/32x32/apps/english-learning-studio.png", "644"],
     ["../../resources/icons/linux/48x48/english-learning-studio.png", "usr/share/icons/hicolor/48x48/apps/english-learning-studio.png", "644"],
@@ -49,7 +49,6 @@ assets = [
 depends = [
     "$auto",
     "ffmpeg",
-    "libmpv2 | libmpv1",
     "libqt6core6",
     "libqt6gui6",
     "libqt6network6",

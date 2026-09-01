@@ -23,7 +23,15 @@ Rectangle {
     property bool contextMenuOnOriginalTrack: false
     property bool canBeginNextSegment: false
     property bool speechRecognizing: false
-    readonly property bool compactMode: width < 720
+    // The bottom controls should stay on one line until their actual minimum
+    // widths no longer fit. Keep this threshold tied to the controls instead
+    // of using a large, unrelated viewport width such as 720px.
+    readonly property real selectionInfoMinimumWidth: 100
+    readonly property real actionControlsMinimumWidth: 124 + 92 + 92 + 3 * 8
+    readonly property real twoColumnMinimumWidth: selectionInfoMinimumWidth
+                                                  + actionControlsMinimumWidth
+                                                  + 8 + 16
+    readonly property bool compactMode: width < twoColumnMinimumWidth
     property real zoomFactor: 1.0
     property real minimumZoom: 1.0
     property real maximumZoom: 2000.0
@@ -1075,7 +1083,9 @@ Rectangle {
             rowSpacing: 6
 
             RowLayout {
+                id: selectionInfoRow
                 Layout.fillWidth: true
+                Layout.minimumWidth: root.selectionInfoMinimumWidth
                 spacing: 8
 
                 Rectangle {
@@ -1113,7 +1123,9 @@ Rectangle {
             }
 
             RowLayout {
+                id: selectionActionRow
                 Layout.fillWidth: true
+                Layout.minimumWidth: root.actionControlsMinimumWidth
                 Layout.alignment: Qt.AlignRight
                 spacing: 8
 

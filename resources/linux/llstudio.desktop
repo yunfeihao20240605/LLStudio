@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=LLStudio
 Comment=English listening and language learning studio
-Exec=/usr/bin/els-app
+Exec=/usr/bin/llstudio
 Icon=english-learning-studio
 Terminal=false
 Type=Application
