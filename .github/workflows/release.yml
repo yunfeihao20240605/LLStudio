@@ -287,6 +287,10 @@ jobs:
           # Raw extraction keeps DEBIAN/control, which is required when the
           # package is rebuilt after adding the bundled Qt runtime.
           dpkg-deb --raw-extract "$artifact_name" "$package_root"
+          # The raw extract is now the source of truth. Remove the first
+          # archive before creating the bundled archive to avoid holding two
+          # complete package copies during compression.
+          rm "$artifact_name"
           # install-qt-action exports Qt6_DIR as the Qt installation prefix
           # (for example .../Qt/6.6.3/gcc_64), not the CMake package folder.
           qt_prefix="$Qt6_DIR"
@@ -361,7 +365,10 @@ jobs:
           test -f "$qt_bundle/lib/libQt6Core.so.6"
           test -f "$qt_bundle/lib/libQt6Qml.so.6"
           test -f "$qt_bundle/lib/libQt6Quick.so.6"
-          dpkg-deb --build --root-owner-group "$package_root" "$artifact_name.bundled"
+          # gzip uses much less memory than the runner's default compressor
+          # while remaining supported by Ubuntu 22.04 and 24.04.
+          dpkg-deb --build --root-owner-group -Z gzip -z 1 \
+            "$package_root" "$artifact_name.bundled"
           mv "$artifact_name.bundled" "$artifact_name"
           rm -rf "$package_root"
           bash scripts/validate-debian-package.sh \
