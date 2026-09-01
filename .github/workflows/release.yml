@@ -254,6 +254,12 @@ jobs:
           # ffmpeg-next detects the native API during its build script.
           cargo clean --release
           cargo build --release -p els-app
+          test -x target/release/els-app
+          # cargo-deb only needs the finished executable. Release dependency
+          # artifacts can consume several gigabytes while the Qt bundle and
+          # the rebuilt Debian archive are being created.
+          find target/release -mindepth 1 -maxdepth 1 ! -name els-app \
+            -exec rm -rf -- {} +
           artifact_name="${{ steps.package.outputs.artifact_name }}"
           case "${{ matrix.target_name }}" in
             linux-ubuntu22.04)
