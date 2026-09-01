@@ -4,7 +4,7 @@ set -euo pipefail
 package=${1:?usage: validate-debian-package.sh PACKAGE.deb MPV_PACKAGE MPV_SONAME}
 expected_mpv_package=${2:?usage: validate-debian-package.sh PACKAGE.deb MPV_PACKAGE MPV_SONAME}
 expected_mpv_soname=${3:?usage: validate-debian-package.sh PACKAGE.deb MPV_PACKAGE MPV_SONAME}
-launcher=$(dpkg-deb -c "$package" | awk '$6 == "./usr/bin/llstudio" { print $6; exit }')
+launcher=$(dpkg-deb -c "$package" | awk '$6 == "./usr/bin/llstudio" { print $6 }')
 [[ -n "$launcher" ]] || { echo "llstudio launcher is missing from $package" >&2; exit 1; }
 
 architecture=$(dpkg-deb -f "$package" Architecture)
