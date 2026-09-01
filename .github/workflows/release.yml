@@ -249,6 +249,10 @@ jobs:
         if: startsWith(matrix.target_name, 'linux-')
         run: |
           cargo install cargo-deb
+          # The FFmpeg headers and libraries come from the current runner.
+          # Do not reuse a release target cached from another FFmpeg ABI;
+          # ffmpeg-next detects the native API during its build script.
+          cargo clean --release
           cargo build --release -p els-app
           artifact_name="${{ steps.package.outputs.artifact_name }}"
           case "${{ matrix.target_name }}" in
