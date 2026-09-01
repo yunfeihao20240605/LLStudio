@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.4.1] - 2026-09-01
+
+### 新增 (Features)
+
+- Linux 同时提供 Ubuntu 22.04 和 Ubuntu 24.04 专用 `.deb` 安装包
+- Ubuntu 22.04 安装包使用 `libmpv1`，Ubuntu 24.04 安装包使用 `libmpv2`
+- Debian 包内部名称改为 `llstudio`，安装后的启动命令改为 `llstudio`
+
+### 优化 (Improvements)
+
+- Windows、Linux 和 macOS 安装包文件名统一包含版本号
+- Linux 安装包文件名区分 Ubuntu 22.04 与 Ubuntu 24.04，避免 mpv ABI 混用
+- 波形底部控件根据实际最小宽度决定是否换行，避免过早进入紧凑排列
+
+### 修复 (Bug Fixes)
+
+- 修复 Linux 程序链接 `libmpv.so.1` 时系统错误选择 `libmpv2` 导致无法启动的问题
+
+### 发布说明 (Release Notes)
+
+- 本版本完善 Linux 多版本发行包和跨平台安装包命名，并修复 Linux mpv 运行库匹配问题
+
 ## [v0.4.0] - 2026-09-01
 
 ### 新增 (Features)
