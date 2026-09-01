@@ -1148,6 +1148,7 @@ ApplicationWindow {
                 onStartTrainingRequested: function(repeatCount, intervalSeconds) {
                     root.startOrContinueTraining(repeatCount, intervalSeconds)
                 }
+                onHideRequested: root.setLibraryPanelExpanded(false)
                 panelBg: theme.panelBg
                 elevatedBg: theme.elevatedBg
                 borderColor: theme.border
@@ -1377,6 +1378,7 @@ ApplicationWindow {
                     onSubtitleSaveSucceeded: function(message) {
                         root.showSuccessMessage(message)
                     }
+                    onHidePanelRequested: root.setDetailsPanelExpanded(false)
                     onNoteExportSucceeded: function(message) {
                         root.showSuccessMessage(message)
                     }
@@ -1440,6 +1442,66 @@ ApplicationWindow {
             statusIsSuccess: themeBridge.lastError.length === 0
                              && root.successMessage.length > 0
         }
+    }
+
+    ToolButton {
+        id: libraryPanelRevealButton
+        visible: !root.videoFullScreen && !root.libraryPanelExpanded
+        z: 100
+        anchors.left: parent.left
+        anchors.leftMargin: 4
+        anchors.verticalCenter: mainContent.verticalCenter
+        width: 32
+        height: 38
+        text: "≡"
+        font.pixelSize: 19
+        onClicked: root.setLibraryPanelExpanded(true)
+        background: Rectangle {
+            radius: 8
+            color: Qt.rgba(theme.panelBg.r, theme.panelBg.g, theme.panelBg.b, 0.94)
+            border.color: theme.border
+            border.width: 1
+        }
+        contentItem: Text {
+            text: libraryPanelRevealButton.text
+            color: libraryPanelRevealButton.hovered
+                   ? theme.accent : theme.textSecondary
+            font: libraryPanelRevealButton.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+        }
+        ToolTip.visible: hovered
+        ToolTip.text: "显示学习库"
+    }
+
+    ToolButton {
+        id: detailsPanelRevealButton
+        visible: !root.videoFullScreen && !root.detailsPanelExpanded
+        z: 100
+        anchors.right: parent.right
+        anchors.rightMargin: 4
+        anchors.verticalCenter: mainContent.verticalCenter
+        width: 32
+        height: 38
+        text: "≡"
+        font.pixelSize: 19
+        onClicked: root.setDetailsPanelExpanded(true)
+        background: Rectangle {
+            radius: 8
+            color: Qt.rgba(theme.panelBg.r, theme.panelBg.g, theme.panelBg.b, 0.94)
+            border.color: theme.border
+            border.width: 1
+        }
+        contentItem: Text {
+            text: detailsPanelRevealButton.text
+            color: detailsPanelRevealButton.hovered
+                   ? theme.accent : theme.textSecondary
+            font: detailsPanelRevealButton.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+        }
+        ToolTip.visible: hovered
+        ToolTip.text: "显示字幕面板"
     }
 
     SettingsDialog {

@@ -34,6 +34,7 @@ Rectangle {
     signal noteExportFailed(string message)
     signal aiSubtitleContextRequested(int cueIndex, real startSecs, real endSecs, string text)
     signal subtitleSaveSucceeded(string message)
+    signal hidePanelRequested()
 
     function selectionIsValid() {
         return waveformBridge
@@ -294,6 +295,23 @@ Rectangle {
                     }
                 }
             }
+
+            ThemedToolButton {
+                id: panelMenuButton
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 30
+                text: "≡"
+                font.pixelSize: 18
+                panelColor: root.panelBg
+                borderColor: root.borderColor
+                textColor: root.textPrimary
+                disabledTextColor: root.textSecondary
+                accentColor: root.accent
+                accentBackgroundColor: root.accentBg
+                onClicked: panelMenu.open()
+                ToolTip.visible: hovered
+                ToolTip.text: "字幕面板显示选项"
+            }
         }
 
         ListView {
@@ -520,4 +538,20 @@ Rectangle {
         }
     }
 
+    ThemedMenu {
+        id: panelMenu
+        panelColor: root.elevatedBg
+        borderColor: root.borderColor
+        textColor: root.textPrimary
+        disabledTextColor: root.textSecondary
+        hoverColor: root.accentBg
+
+        ThemedMenuItem {
+            text: "隐藏字幕面板"
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
+            onTriggered: root.hidePanelRequested()
+        }
+    }
 }

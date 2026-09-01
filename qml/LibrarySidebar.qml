@@ -44,6 +44,7 @@ Rectangle {
 
     signal videoOpenRequested(string path)
     signal startTrainingRequested(int repeatCount, real intervalSeconds)
+    signal hideRequested()
 
     function applyTrainingSettings(repeatCount, intervalSeconds) {
         sidebarControlPanel.applyTrainingSettings(repeatCount, intervalSeconds)
@@ -137,9 +138,21 @@ Rectangle {
                         Layout.fillWidth: true
                     }
 
-                    Text {
-                        text: "✕"
-                        color: textSecondary
+                    ThemedToolButton {
+                        id: panelMenuButton
+                        Layout.preferredWidth: 30
+                        Layout.preferredHeight: 30
+                        text: "≡"
+                        font.pixelSize: 18
+                        panelColor: root.panelBg
+                        borderColor: root.borderColor
+                        textColor: root.textPrimary
+                        disabledTextColor: root.textSecondary
+                        accentColor: root.accent
+                        accentBackgroundColor: root.accentBg
+                        onClicked: panelMenu.open()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "学习库显示选项"
                     }
                 }
 
@@ -861,6 +874,23 @@ Rectangle {
             textSecondary: root.textSecondary
             accent: root.accent
             accentBg: root.accentBg
+        }
+    }
+
+    ThemedMenu {
+        id: panelMenu
+        panelColor: root.elevatedBg
+        borderColor: root.borderColor
+        textColor: root.textPrimary
+        disabledTextColor: root.textSecondary
+        hoverColor: root.accentBg
+
+        ThemedMenuItem {
+            text: "隐藏学习库"
+            textColor: root.textPrimary
+            disabledTextColor: root.textSecondary
+            hoverColor: root.accentBg
+            onTriggered: root.hideRequested()
         }
     }
 }
