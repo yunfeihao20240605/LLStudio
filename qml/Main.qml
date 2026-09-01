@@ -912,6 +912,7 @@ ApplicationWindow {
             }
             Platform.MenuItem {
                 text: "导入字幕"
+                visible: false
             }
             Platform.MenuSeparator {}
             Platform.MenuItem {

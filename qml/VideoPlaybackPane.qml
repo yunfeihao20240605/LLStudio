@@ -112,9 +112,7 @@ Rectangle {
     }
 
     function openVideo() {
-        var pickedPath = mediaBridge ? mediaBridge.pickVideoFile() : ""
-        if (pickedPath.length > 0)
-            loadVideoAndRelatedAssets(pickedPath)
+        videoFileDialog.open()
     }
 
     function openAudio() {
@@ -146,6 +144,24 @@ Rectangle {
         var path = localPathFromUrl(selectedFile)
         if (path.length > 0)
             loadMediaAndRelatedAssets(path, true)
+    }
+
+    function openVideoPath(selectedFile) {
+        var path = localPathFromUrl(selectedFile)
+        if (path.length > 0)
+            loadVideoAndRelatedAssets(path)
+    }
+
+    Platform.FileDialog {
+        id: videoFileDialog
+        title: "打开视频"
+        fileMode: Platform.FileDialog.OpenFile
+        nameFilters: [
+            "视频文件 (*.mp4 *.mkv *.avi *.mov *.webm *.m4v)",
+            "所有文件 (*)"
+        ]
+
+        onAccepted: root.openVideoPath(file)
     }
 
     Platform.FileDialog {
