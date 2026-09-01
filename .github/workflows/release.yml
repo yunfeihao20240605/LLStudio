@@ -377,9 +377,10 @@ jobs:
           test -f "$qt_bundle/lib/libQt6Quick.so.6"
           du -sh "$package_root" "$qt_bundle" "$qt_prefix" || true
           df -h "$GITHUB_WORKSPACE"
-          # gzip uses much less memory than the runner's default compressor
-          # while remaining supported by Ubuntu 22.04 and 24.04.
-          dpkg-deb --build --root-owner-group -Z gzip -z 1 \
+          # Use an uncompressed Debian data archive. It avoids compressor
+          # subprocess failures on the hosted Ubuntu runners and remains a
+          # valid package format for Ubuntu 22.04 and 24.04.
+          dpkg-deb --build --root-owner-group -Z none \
             "$package_root" "$artifact_name.bundled"
           mv "$artifact_name.bundled" "$artifact_name"
           rm -rf "$package_root"
