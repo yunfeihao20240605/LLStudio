@@ -27,6 +27,7 @@ pub mod qobject {
         #[qml_element]
         #[qproperty(QString, theme_mode, cxx_name = "themeMode")]
         #[qproperty(QString, last_error, cxx_name = "lastError")]
+        #[qproperty(QString, layout_mode, cxx_name = "layoutMode")]
         #[qproperty(bool, library_panel_expanded, cxx_name = "libraryPanelExpanded")]
         #[qproperty(bool, details_panel_expanded, cxx_name = "detailsPanelExpanded")]
         #[qproperty(bool, waveform_on_right, cxx_name = "waveformOnRight")]
@@ -48,6 +49,7 @@ pub mod qobject {
         #[cxx_name = "saveLayoutSettings"]
         fn save_layout_settings(
             self: Pin<&mut ThemeBridge>,
+            layout_mode: &QString,
             library_panel_expanded: bool,
             details_panel_expanded: bool,
             waveform_on_right: bool,
@@ -58,6 +60,7 @@ pub mod qobject {
 pub struct ThemeBridgeRust {
     theme_mode: QString,
     last_error: QString,
+    layout_mode: QString,
     library_panel_expanded: bool,
     details_panel_expanded: bool,
     waveform_on_right: bool,
@@ -111,10 +114,17 @@ impl Default for ThemeBridgeRust {
         );
         let waveform_on_right =
             read_bool_setting(&settings, els_storage::LAYOUT_WAVEFORM_ON_RIGHT_KEY, false);
+        let layout_mode = read_layout_mode(
+            &settings,
+            library_panel_expanded,
+            details_panel_expanded,
+            waveform_on_right,
+        );
 
         Self {
             theme_mode: QString::from(&theme_mode),
             last_error: QString::from(&last_error),
+            layout_mode: QString::from(layout_mode),
             library_panel_expanded,
             details_panel_expanded,
             waveform_on_right,
@@ -170,21 +180,33 @@ impl qobject::ThemeBridge {
 
     fn save_layout_settings(
         mut self: Pin<&mut Self>,
+        layout_mode: &QString,
         library_panel_expanded: bool,
         details_panel_expanded: bool,
         waveform_on_right: bool,
     ) -> bool {
+        let layout_mode = layout_mode.to_string();
+        if !is_valid_layout_mode(&layout_mode) {
+            let error = format!("Invalid layout mode: {layout_mode}");
+            eprintln!("{error}");
+            self.as_mut().set_last_error(QString::from(&error));
+            return false;
+        }
+
         let persist_result = {
             let mut rust = self.as_mut().rust_mut();
             rust.settings
-                .set(
-                    els_storage::LAYOUT_LIBRARY_PANEL_EXPANDED_KEY,
-                    if library_panel_expanded {
-                        "true"
-                    } else {
-                        "false"
-                    },
-                )
+                .set(els_storage::LAYOUT_MODE_KEY, &layout_mode)
+                .and_then(|_| {
+                    rust.settings.set(
+                        els_storage::LAYOUT_LIBRARY_PANEL_EXPANDED_KEY,
+                        if library_panel_expanded {
+                            "true"
+                        } else {
+                            "false"
+                        },
+                    )
+                })
                 .and_then(|_| {
                     rust.settings.set(
                         els_storage::LAYOUT_DETAILS_PANEL_EXPANDED_KEY,
@@ -213,6 +235,37 @@ impl qobject::ThemeBridge {
             }
         }
     }
+}
+
+fn read_layout_mode(
+    settings: &els_storage::SettingsStore,
+    library_panel_expanded: bool,
+    details_panel_expanded: bool,
+    waveform_on_right: bool,
+) -> &'static str {
+    if let Ok(Some(mode)) = settings.get(els_storage::LAYOUT_MODE_KEY) {
+        if is_valid_layout_mode(&mode) {
+            return match mode.as_str() {
+                "standard" => "standard",
+                "compact" => "compact",
+                _ => "custom",
+            };
+        }
+    }
+
+    if library_panel_expanded && details_panel_expanded {
+        if waveform_on_right {
+            "compact"
+        } else {
+            "standard"
+        }
+    } else {
+        "custom"
+    }
+}
+
+fn is_valid_layout_mode(layout_mode: &str) -> bool {
+    matches!(layout_mode, "standard" | "compact" | "custom")
 }
 
 fn read_bool_setting(settings: &els_storage::SettingsStore, key: &str, default: bool) -> bool {

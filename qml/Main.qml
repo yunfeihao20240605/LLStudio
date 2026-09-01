@@ -25,34 +25,58 @@ ApplicationWindow {
     property int selectionAdjustmentCueIndex: -1
     property real selectionAdjustmentOriginalStart: 0
     property real selectionAdjustmentOriginalEnd: 0
+    property string layoutMode: themeBridge.layoutMode
     property bool libraryPanelExpanded: themeBridge.libraryPanelExpanded
     property bool detailsPanelExpanded: themeBridge.detailsPanelExpanded
     property bool waveformOnRight: themeBridge.waveformOnRight
 
     function saveLayoutSettings() {
-        return themeBridge.saveLayoutSettings(libraryPanelExpanded,
+        return themeBridge.saveLayoutSettings(layoutMode,
+                                               libraryPanelExpanded,
                                                detailsPanelExpanded,
                                                waveformOnRight)
     }
 
     function setLibraryPanelExpanded(expanded) {
-        if (libraryPanelExpanded === expanded)
+        if (layoutMode === "custom"
+                && libraryPanelExpanded === expanded)
             return
+        layoutMode = "custom"
         libraryPanelExpanded = expanded
         saveLayoutSettings()
     }
 
     function setDetailsPanelExpanded(expanded) {
-        if (detailsPanelExpanded === expanded)
+        if (layoutMode === "custom"
+                && detailsPanelExpanded === expanded)
             return
+        layoutMode = "custom"
         detailsPanelExpanded = expanded
         saveLayoutSettings()
     }
 
     function setWaveformOnRight(onRight) {
-        if (waveformOnRight === onRight)
+        if (layoutMode === "custom"
+                && waveformOnRight === onRight)
             return
+        layoutMode = "custom"
         waveformOnRight = onRight
+        saveLayoutSettings()
+    }
+
+    function applyStandardLayout() {
+        layoutMode = "standard"
+        libraryPanelExpanded = true
+        detailsPanelExpanded = true
+        waveformOnRight = false
+        saveLayoutSettings()
+    }
+
+    function applyCompactLayout() {
+        layoutMode = "compact"
+        libraryPanelExpanded = true
+        detailsPanelExpanded = true
+        waveformOnRight = true
         saveLayoutSettings()
     }
 
@@ -967,37 +991,53 @@ ApplicationWindow {
         Platform.Menu {
             title: "布局"
             Platform.MenuItem {
-                text: root.libraryPanelExpanded
-                      ? "隐藏学习库与学习控制"
-                      : "显示学习库与学习控制"
+                text: "标准布局"
                 checkable: true
-                checked: root.libraryPanelExpanded
-                onTriggered: root.setLibraryPanelExpanded(
-                                 !root.libraryPanelExpanded)
+                checked: root.layoutMode === "standard"
+                onTriggered: root.applyStandardLayout()
             }
             Platform.MenuItem {
-                text: root.detailsPanelExpanded
-                      ? "隐藏字幕、笔记、AI 与学习片段"
-                      : "显示字幕、笔记、AI 与学习片段"
+                text: "紧凑布局"
                 checkable: true
-                checked: root.detailsPanelExpanded
-                onTriggered: root.setDetailsPanelExpanded(
-                                 !root.detailsPanelExpanded)
+                checked: root.layoutMode === "compact"
+                onTriggered: root.applyCompactLayout()
             }
             Platform.MenuSeparator {}
             Platform.Menu {
-                title: "波形位置"
+                title: "自定义"
                 Platform.MenuItem {
-                    text: "视频下方"
+                    text: root.libraryPanelExpanded
+                          ? "隐藏学习库"
+                          : "显示学习库"
                     checkable: true
-                    checked: !root.waveformOnRight
-                    onTriggered: root.setWaveformOnRight(false)
+                    checked: root.libraryPanelExpanded
+                    onTriggered: root.setLibraryPanelExpanded(
+                                     !root.libraryPanelExpanded)
                 }
                 Platform.MenuItem {
-                    text: "视频右侧"
+                    text: root.detailsPanelExpanded
+                          ? "隐藏字幕面板"
+                          : "显示字幕面板"
                     checkable: true
-                    checked: root.waveformOnRight
-                    onTriggered: root.setWaveformOnRight(true)
+                    checked: root.detailsPanelExpanded
+                    onTriggered: root.setDetailsPanelExpanded(
+                                     !root.detailsPanelExpanded)
+                }
+                Platform.MenuSeparator {}
+                Platform.Menu {
+                    title: "波形位置"
+                    Platform.MenuItem {
+                        text: "视频下方"
+                        checkable: true
+                        checked: !root.waveformOnRight
+                        onTriggered: root.setWaveformOnRight(false)
+                    }
+                    Platform.MenuItem {
+                        text: "视频右侧"
+                        checkable: true
+                        checked: root.waveformOnRight
+                        onTriggered: root.setWaveformOnRight(true)
+                    }
                 }
             }
         }

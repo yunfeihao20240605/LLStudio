@@ -22,7 +22,7 @@ pub use recording::SqliteRecordingRepository;
 pub use settings::{
     AiSettingsRepository, SettingsStore, AI_API_KEY_KEY, AI_BASE_URL_KEY, AI_MODEL_KEY,
     AI_SYSTEM_PROMPT_KEY, LAYOUT_DETAILS_PANEL_EXPANDED_KEY, LAYOUT_LIBRARY_PANEL_EXPANDED_KEY,
-    LAYOUT_WAVEFORM_ON_RIGHT_KEY, THEME_MODE_KEY,
+    LAYOUT_MODE_KEY, LAYOUT_WAVEFORM_ON_RIGHT_KEY, THEME_MODE_KEY,
 };
-pub use sqlite::SqliteSegmentRepository;
 pub use speech_settings::{SpeechProviderProfile, SpeechSettingsRepository};
+pub use sqlite::SqliteSegmentRepository;

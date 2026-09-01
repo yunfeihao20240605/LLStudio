@@ -6,6 +6,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 
 pub const THEME_MODE_KEY: &str = "theme_mode";
+pub const LAYOUT_MODE_KEY: &str = "layout.mode";
 pub const LAYOUT_LIBRARY_PANEL_EXPANDED_KEY: &str = "layout.library_panel_expanded";
 pub const LAYOUT_DETAILS_PANEL_EXPANDED_KEY: &str = "layout.details_panel_expanded";
 pub const LAYOUT_WAVEFORM_ON_RIGHT_KEY: &str = "layout.waveform_on_right";
