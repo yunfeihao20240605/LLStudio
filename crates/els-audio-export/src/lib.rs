@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 pub struct ExportedAudio {
     input: AudioInput,
 }
@@ -35,6 +38,7 @@ pub fn export_video_range(
     let output_path = temporary_audio_path(format);
     let duration = range.end - range.start;
     let mut command = Command::new("ffmpeg");
+    hide_console_window(&mut command);
     command
         .args(["-hide_banner", "-loglevel", "error", "-y", "-ss"])
         .arg(format!("{:.6}", range.start))
@@ -66,6 +70,16 @@ pub fn export_video_range(
         },
     })
 }
+
+#[cfg(target_os = "windows")]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hide_console_window(_command: &mut Command) {}
 
 fn temporary_audio_path(format: AudioFormat) -> PathBuf {
     let nonce = SystemTime::now()

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.3.5] - 2026-09-01
+
+### 修复 (Bug Fixes)
+
+- 修复 Windows 打开视频时 `ffprobe.exe` 短暂弹出控制台窗口的问题
+- 隐藏波形处理、录音降噪和片段音频提取调用的 `ffmpeg.exe` 控制台窗口
+- 保留 FFmpeg 工具原有的输出捕获、错误处理和功能行为
+
+### 发布说明 (Release Notes)
+
+- 本版本优化 Windows 媒体工具的后台运行体验，不再显示 FFmpeg/FFprobe 控制台窗口
+
 ## [v0.3.4] - 2026-09-01
 
 ### 修复 (Bug Fixes)

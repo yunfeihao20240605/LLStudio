@@ -30,6 +30,8 @@ const PREVIEW_SECONDS_PER_BIN: f64 = 0.1;
 pub const DETAIL_TILE_DURATION_SECS: f64 = 10.0;
 pub const DETAIL_SECONDS_PER_BIN: f64 = 0.01;
 const DETAIL_SEEK_PADDING_SECS: f64 = 0.05;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformTile {
@@ -283,7 +285,9 @@ where
     }
 
     let ffmpeg_bin = ffmpeg_cli_path();
-    let mut child = Command::new(&ffmpeg_bin)
+    let mut command = Command::new(&ffmpeg_bin);
+    hide_console_window(&mut command);
+    let mut child = command
         .args([
             "-v",
             "error",
@@ -436,7 +440,9 @@ fn generate_detail_tile_cli(
     let decode_duration = end_secs - seek_start + DETAIL_SEEK_PADDING_SECS;
     let bin_count = ((end_secs - start_secs) / DETAIL_SECONDS_PER_BIN).ceil() as usize;
     let ffmpeg_bin = ffmpeg_cli_path();
-    let mut child = Command::new(&ffmpeg_bin)
+    let mut command = Command::new(&ffmpeg_bin);
+    hide_console_window(&mut command);
+    let mut child = command
         .args([
             "-v",
             "error",
@@ -538,6 +544,16 @@ fn generate_detail_tile_cli(
         bins,
     })
 }
+
+#[cfg(target_os = "windows")]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hide_console_window(_command: &mut Command) {}
 
 fn ffmpeg_cli_path() -> PathBuf {
     if let Ok(value) = std::env::var("ELS_FFMPEG_BIN") {

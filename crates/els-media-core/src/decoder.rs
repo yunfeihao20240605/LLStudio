@@ -6,6 +6,9 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MediaProbe {
     pub duration_secs: f64,
@@ -25,7 +28,9 @@ impl Decoder {
             ));
         }
 
-        let output = Command::new(ffprobe_cli_path())
+        let mut command = Command::new(ffprobe_cli_path());
+        hide_console_window(&mut command);
+        let output = command
             .args([
                 "-v",
                 "error",
@@ -88,6 +93,16 @@ impl Decoder {
         })
     }
 }
+
+#[cfg(target_os = "windows")]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hide_console_window(_command: &mut Command) {}
 
 fn ffprobe_cli_path() -> PathBuf {
     if let Ok(value) = std::env::var("ELS_FFPROBE_BIN") {

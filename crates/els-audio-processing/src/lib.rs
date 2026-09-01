@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoiseReductionProfile {
     Light,
@@ -54,7 +57,9 @@ pub fn process_recording(
         ));
     }
     let output_path = denoised_path(original_path, profile);
-    let output = Command::new("ffmpeg")
+    let mut command = Command::new("ffmpeg");
+    hide_console_window(&mut command);
+    let output = command
         .args(["-hide_banner", "-loglevel", "error", "-y", "-i"])
         .arg(original_path)
         .args(["-af", profile.filter(), "-ac", "1", "-ar"])
@@ -72,6 +77,16 @@ pub fn process_recording(
     }
     Ok(output_path)
 }
+
+#[cfg(target_os = "windows")]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hide_console_window(_command: &mut Command) {}
 
 #[cfg(test)]
 mod tests {
