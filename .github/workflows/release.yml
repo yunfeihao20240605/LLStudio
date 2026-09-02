@@ -123,19 +123,14 @@ jobs:
       - name: Install FFmpeg & mpv (macOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          if [ "${{ matrix.target_triple }}" = "x86_64-apple-darwin" ]; then
-            # macos-15-intel currently provides FFmpeg 9, while ffmpeg-next
-            # 8.1.0 requires the FFmpeg 8 headers and constants.
-            brew install mpv pkg-config
-            brew tap-new --no-git local/ffmpeg8
-            brew extract --version=8.1.2 --git-revision=c7348004c5876a7cddfa236babd4bf3489f21d87 ffmpeg local/ffmpeg8
-            brew install local/ffmpeg8/ffmpeg@8.1.2
-            FFMPEG_FORMULA="local/ffmpeg8/ffmpeg@8.1.2"
-          else
-            brew install ffmpeg
-            brew install mpv pkg-config
-            FFMPEG_FORMULA="ffmpeg"
-          fi
+          # ffmpeg-next 8.1.0 requires FFmpeg 8 headers and constants.
+          # Pin both macOS architectures to the same FFmpeg 8.1.2 formula;
+          # otherwise the arm64 runner may resolve to FFmpeg 9.
+          brew install mpv pkg-config
+          brew tap-new --no-git local/ffmpeg8
+          brew extract --version=8.1.2 --git-revision=c7348004c5876a7cddfa236babd4bf3489f21d87 ffmpeg local/ffmpeg8
+          brew install local/ffmpeg8/ffmpeg@8.1.2
+          FFMPEG_FORMULA="local/ffmpeg8/ffmpeg@8.1.2"
           FFMPEG_PREFIX="$(brew --prefix "$FFMPEG_FORMULA")"
           MPV_PREFIX="$(brew --prefix mpv)"
           FFMPEG_PKGCONFIG="$FFMPEG_PREFIX/lib/pkgconfig"

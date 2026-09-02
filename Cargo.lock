@@ -503,7 +503,7 @@ checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
 name = "els-ai-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "els-app"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "cxx-qt",
  "cxx-qt-build",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "els-audio-capture"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "cpal",
  "els-types",
@@ -541,7 +541,7 @@ dependencies = [
 
 [[package]]
 name = "els-audio-export"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-speech-core",
  "els-types",
@@ -549,21 +549,21 @@ dependencies = [
 
 [[package]]
 name = "els-audio-processing"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
 ]
 
 [[package]]
 name = "els-learning-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
 ]
 
 [[package]]
 name = "els-media-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
  "libc",
@@ -573,14 +573,14 @@ dependencies = [
 
 [[package]]
 name = "els-note-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
 ]
 
 [[package]]
 name = "els-qt-bridge"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "cxx",
  "cxx-qt",
@@ -606,14 +606,14 @@ dependencies = [
 
 [[package]]
 name = "els-recording-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
 ]
 
 [[package]]
 name = "els-speech-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
  "serde",
@@ -622,7 +622,7 @@ dependencies = [
 
 [[package]]
 name = "els-speech-tencent"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "base64",
  "els-speech-core",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "els-storage"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-ai-core",
  "els-learning-core",
@@ -650,18 +650,18 @@ dependencies = [
 
 [[package]]
 name = "els-subtitle-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
 ]
 
 [[package]]
 name = "els-types"
-version = "0.4.4"
+version = "0.4.5"
 
 [[package]]
 name = "els-waveform-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "els-types",
  "ffmpeg-next",

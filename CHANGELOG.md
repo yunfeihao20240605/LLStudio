@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.4.5] - 2026-09-03
+
+### 修复 (Bug Fixes)
+
+- 固定 macOS arm64 和 x86_64 使用 FFmpeg 8.1.2，避免 GitHub Actions 自动升级到 FFmpeg 9 导致构建失败
+
+### 发布说明 (Release Notes)
+
+- 本版本延续 `v0.4.4` 的 Qt SVG 运行时修复，并完善 macOS 双架构发布环境的一致性
+
 ## [v0.4.4] - 2026-09-03
 
 ### 修复 (Bug Fixes)

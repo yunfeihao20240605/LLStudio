@@ -19,7 +19,7 @@ arch="$(uname -m)"
 case "$arch" in
   arm64)
     target="aarch64-apple-darwin"
-    ffmpeg_formula="ffmpeg"
+    ffmpeg_formula="local/ffmpeg8/ffmpeg@8.1.2"
     ;;
   x86_64)
     target="x86_64-apple-darwin"
@@ -32,26 +32,22 @@ esac
 
 brew install qt mpv pkg-config create-dmg
 
-if [[ "$arch" == "x86_64" ]]; then
-  if ! brew tap | grep -Fxq "local/ffmpeg8"; then
-    brew tap-new --no-git local/ffmpeg8
-  fi
-  ffmpeg_tap_dir="$(brew --repository local/ffmpeg8)"
-  ffmpeg_formula_file="$ffmpeg_tap_dir/Formula/ffmpeg@8.1.2.rb"
-  if [[ ! -f "$ffmpeg_formula_file" ]]; then
-    mkdir -p "$(dirname "$ffmpeg_formula_file")"
-    curl -fsSL \
-      "https://api.github.com/repos/Homebrew/homebrew-core/contents/Formula/f/ffmpeg.rb?ref=c8d371d10663c637fe24eafcdf6bcd5cd0bec4ea" |
-      python3 -c 'import base64,json,sys; print(base64.b64decode(json.load(sys.stdin)["content"]).decode(), end="")' |
-      sed 's/^class Ffmpeg < Formula$/class FfmpegAT812 < Formula/' > "$ffmpeg_formula_file"
-  fi
-  brew trust --formula "$ffmpeg_formula"
-  ffmpeg8_prefix="$(brew --prefix ffmpeg@8.1.2)"
-  if [[ ! -x "$ffmpeg8_prefix/bin/ffmpeg" || ! -x "$ffmpeg8_prefix/bin/ffprobe" ]]; then
-    brew reinstall --formula --build-from-source "$ffmpeg_formula_file"
-  fi
-else
-  brew install ffmpeg
+if ! brew tap | grep -Fxq "local/ffmpeg8"; then
+  brew tap-new --no-git local/ffmpeg8
+fi
+ffmpeg_tap_dir="$(brew --repository local/ffmpeg8)"
+ffmpeg_formula_file="$ffmpeg_tap_dir/Formula/ffmpeg@8.1.2.rb"
+if [[ ! -f "$ffmpeg_formula_file" ]]; then
+  mkdir -p "$(dirname "$ffmpeg_formula_file")"
+  curl -fsSL \
+    "https://api.github.com/repos/Homebrew/homebrew-core/contents/Formula/f/ffmpeg.rb?ref=c8d371d10663c637fe24eafcdf6bcd5cd0bec4ea" |
+    python3 -c 'import base64,json,sys; print(base64.b64decode(json.load(sys.stdin)["content"]).decode(), end="")' |
+    sed 's/^class Ffmpeg < Formula$/class FfmpegAT812 < Formula/' > "$ffmpeg_formula_file"
+fi
+brew trust --formula "$ffmpeg_formula"
+ffmpeg8_prefix="$(brew --prefix ffmpeg@8.1.2)"
+if [[ ! -x "$ffmpeg8_prefix/bin/ffmpeg" || ! -x "$ffmpeg8_prefix/bin/ffprobe" ]]; then
+  brew reinstall --formula --build-from-source "$ffmpeg_formula_file"
 fi
 
 qt_prefix="${QT_PREFIX:-$(brew --prefix qt)}"
