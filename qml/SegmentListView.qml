@@ -510,6 +510,7 @@ Rectangle {
                         textColor: root.textPrimary
                         disabledTextColor: root.textSecondary
                         hoverColor: root.accentBg
+                        icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/note-add.svg"
                         text: "为该片段添加笔记"
                         onTriggered: root.noteCreationRequested(
                                          segmentDelegate.startSecs,
@@ -522,6 +523,7 @@ Rectangle {
                         textColor: root.textPrimary
                         disabledTextColor: root.textSecondary
                         hoverColor: root.accentBg
+                        icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/label-play.svg"
                         text: segmentDelegate.marker.length > 0
                               ? "播放同标记片段：“" + segmentDelegate.marker + "”"
                               : "播放同标记片段"
@@ -535,6 +537,7 @@ Rectangle {
                         textColor: root.textPrimary
                         disabledTextColor: root.textSecondary
                         hoverColor: root.accentBg
+                        menuIcon: "qrc:/qt/qml/com/yfhao/els/app/icons/tag.svg"
                         title: root.selectionTargetsFor(segmentDelegate.index).length > 1
                                ? "设置标记（"
                                  + root.selectionTargetsFor(segmentDelegate.index).length
@@ -589,6 +592,7 @@ Rectangle {
                         textColor: root.textPrimary
                         disabledTextColor: root.textSecondary
                         hoverColor: root.accentBg
+                        icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/trash.svg"
                         text: "清除标记"
                         enabled: segmentDelegate.marker.length > 0
                                  || root.selectedIndices.length > 1

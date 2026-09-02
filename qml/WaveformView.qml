@@ -370,11 +370,13 @@ Rectangle {
         id: waveformContextMenu
         panelColor: root.panelBg
         borderColor: root.borderColor
+        preferredWidth: 320
 
         ThemedMenuItem {
             textColor: root.textPrimary
             disabledTextColor: root.textSecondary
             hoverColor: root.accentBg
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/play.svg"
             visible: root.contextMenuOnOriginalTrack
             text: !root.originalTrainingActive ? "播放原音"
                   : (root.originalPlaybackPlaying
@@ -392,6 +394,7 @@ Rectangle {
             textColor: root.textPrimary
             disabledTextColor: root.textSecondary
             hoverColor: root.accentBg
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/note-add.svg"
             text: waveformBridge
                   && waveformBridge.hasSelectionStart
                   && waveformBridge.hasSelectionEnd
@@ -417,6 +420,7 @@ Rectangle {
             textColor: root.textPrimary
             disabledTextColor: root.textSecondary
             hoverColor: root.accentBg
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/closed-caption.svg"
             text: root.speechRecognizing ? "正在识别当前片段…" : "识别当前片段字幕"
             enabled: !root.speechRecognizing
                      && waveformBridge
@@ -434,7 +438,8 @@ Rectangle {
             textColor: root.textPrimary
             disabledTextColor: root.textSecondary
             hoverColor: root.accentBg
-            text: "从当前片段结尾开始下一片段"
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/next-segment.svg"
+            text: "从当前片段结尾开始新片段"
             enabled: root.canBeginNextSegment
             onTriggered: root.nextSegmentRequested()
         }
@@ -445,6 +450,7 @@ Rectangle {
             textColor: root.textPrimary
             disabledTextColor: root.textSecondary
             hoverColor: root.accentBg
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/trash.svg"
             text: "清除选区"
             enabled: waveformBridge
                      && (waveformBridge.hasSelectionStart || waveformBridge.hasSelectionEnd)

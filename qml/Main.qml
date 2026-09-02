@@ -672,6 +672,10 @@ ApplicationWindow {
         mode: themeBridge.themeMode
     }
 
+    palette.toolTipBase: theme.elevatedBg
+    palette.toolTipText: theme.textPrimary
+    palette.dark: theme.border
+
     MediaBridge {
         id: mediaBridge
     }

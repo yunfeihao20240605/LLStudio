@@ -370,6 +370,7 @@ Item {
             textColor: root.textColor
             disabledTextColor: root.textColor
             hoverColor: root.menuHoverColor
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/record-play.svg"
             text: !root.trainingPlaybackActive ? "播放录音"
                   : (root.trainingPlaybackPlaying
                      ? "暂停播放录音" : "继续播放录音")
@@ -381,6 +382,7 @@ Item {
             textColor: root.textColor
             disabledTextColor: root.textColor
             hoverColor: root.menuHoverColor
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/save-audio.svg"
             text: "保存音频"
             enabled: root.recordingBridge
                      && root.recordingBridge.hasRecording
@@ -395,6 +397,7 @@ Item {
             textColor: root.textColor
             disabledTextColor: root.textColor
             hoverColor: root.menuHoverColor
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/reset-alignment.svg"
             text: "重置录音对齐"
             enabled: root.recordingBridge
                      && Math.abs(root.recordingBridge.alignmentOffset) > 0.0005
@@ -405,6 +408,7 @@ Item {
             textColor: root.textColor
             disabledTextColor: root.textColor
             hoverColor: root.menuHoverColor
+            icon.source: "qrc:/qt/qml/com/yfhao/els/app/icons/delete-recording.svg"
             text: "删除录音"
             onTriggered: root.deleteRequested()
         }

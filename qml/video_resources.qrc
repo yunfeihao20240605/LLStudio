@@ -4,5 +4,16 @@
     <file alias="video-empty-decoration.svg">video-empty-decoration.svg</file>
     <file alias="llstudio-brand.png">llstudio-brand.png</file>
     <file alias="llstudio-brand-light.png">llstudio-brand-light.png</file>
+    <file alias="icons/closed-caption.svg">icons/closed-caption.svg</file>
+    <file alias="icons/delete-recording.svg">icons/delete-recording.svg</file>
+    <file alias="icons/label-play.svg">icons/label-play.svg</file>
+    <file alias="icons/next-segment.svg">icons/next-segment.svg</file>
+    <file alias="icons/note-add.svg">icons/note-add.svg</file>
+    <file alias="icons/play.svg">icons/play.svg</file>
+    <file alias="icons/record-play.svg">icons/record-play.svg</file>
+    <file alias="icons/reset-alignment.svg">icons/reset-alignment.svg</file>
+    <file alias="icons/save-audio.svg">icons/save-audio.svg</file>
+    <file alias="icons/tag.svg">icons/tag.svg</file>
+    <file alias="icons/trash.svg">icons/trash.svg</file>
   </qresource>
 </RCC>
