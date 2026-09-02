@@ -252,6 +252,11 @@ jobs:
               Copy-Item -Destination dist -Force
           }
           windeployqt --release --qmldir qml --compiler-runtime --no-translations dist/els-app.exe
+          # SVG icons are embedded in the QRC, but Qt still needs its SVG
+          # image plugin at runtime. Add it explicitly to the installer.
+          New-Item -ItemType Directory -Force -Path dist/imageformats | Out-Null
+          Copy-Item "$env:Qt6_DIR/bin/Qt6Svg.dll" dist/Qt6Svg.dll -Force
+          Copy-Item "$env:Qt6_DIR/plugins/imageformats/qsvg.dll" dist/imageformats/qsvg.dll -Force
           pwsh -File scripts/validate-windows-package.ps1 -Dist dist
           & $makensis "/DPRODUCT_VERSION=$productVersion" installer.nsi
           $artifactName = "${{ steps.package.outputs.artifact_name }}"
@@ -381,6 +386,14 @@ jobs:
             fi
           done
 
+          # Keep the SVG runtime explicit. The menu SVGs are embedded in the
+          # executable, but Qt still needs both the QtSvg library and the
+          # imageformats plugin at runtime.
+          cp -a "$qt_prefix/lib/libQt6Svg.so"* "$qt_bundle/lib/"
+          mkdir -p "$qt_bundle/plugins/imageformats"
+          cp -a "$qt_prefix/plugins/imageformats/libqsvg.so"* \
+            "$qt_bundle/plugins/imageformats/"
+
           # QML and platform plugins can have additional Qt installer
           # dependencies (for example ICU). Include those transitively.
           while IFS= read -r -d '' qt_object; do
@@ -446,6 +459,11 @@ jobs:
           cp target/${{ matrix.target_triple }}/release/els-app "dist/LLStudio.app/Contents/MacOS/els-app"
 
           macdeployqt "dist/LLStudio.app" -qmldir=qml -always-overwrite
+          # macdeployqt handles the linked QtSvg framework; copy the SVG
+          # image plugin explicitly because the SVG files are QRC resources.
+          mkdir -p "dist/LLStudio.app/Contents/PlugIns/imageformats"
+          cp "$Qt6_DIR/plugins/imageformats/libqsvg.dylib" \
+             "dist/LLStudio.app/Contents/PlugIns/imageformats/libqsvg.dylib"
           rm -rf "dist/LLStudio.app/Contents/PlugIns/sqldrivers"
           cp resources/icons/macos/LLStudio.icns "dist/LLStudio.app/Contents/Resources/LLStudio.icns"
           export FFMPEG_PREFIX="$(brew --prefix "$FFMPEG_FORMULA")"

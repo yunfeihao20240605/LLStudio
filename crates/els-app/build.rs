@@ -46,6 +46,7 @@ fn main() {
     .qrc("../../qml/video_resources.qrc")
     .qt_module("Network")
     .qt_module("QuickControls2")
+    .qt_module("Svg")
     .build();
 }
 

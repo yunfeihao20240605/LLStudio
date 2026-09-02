@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.4.4] - 2026-09-03
+
+### 修复 (Bug Fixes)
+
+- 显式启用 Qt SVG 模块，确保右键菜单图标在 Windows、macOS 和 Linux 发布包中正常加载
+- 将 Qt SVG 运行库和图像插件直接随各平台安装包发布，避免 macOS DMG 中 SVG 图标不显示
+
+### 发布说明 (Release Notes)
+
+- 本版本修复跨平台发布包中 Qt SVG 运行时依赖缺失的问题，不改变现有菜单、播放和媒体功能
+
 ## [v0.4.3] - 2026-09-03
 
 ### 优化 (Improvements)

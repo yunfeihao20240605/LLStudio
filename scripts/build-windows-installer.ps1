@@ -125,6 +125,11 @@ foreach ($runtimeDir in @($MpvRuntimeDir, $env:MPV_PREFIX)) {
 }
 
 & $qtBin --release --qmldir qml --compiler-runtime --no-translations (Join-Path $dist "els-app.exe")
+# SVG icons are embedded in the QRC, but Qt still needs its SVG image plugin.
+$svgPluginDir = Join-Path $qtPrefix "plugins\imageformats"
+New-Item -ItemType Directory -Force (Join-Path $dist "imageformats") | Out-Null
+Copy-Item (Join-Path $qtPrefix "bin\Qt6Svg.dll") (Join-Path $dist "Qt6Svg.dll") -Force
+Copy-Item (Join-Path $svgPluginDir "qsvg.dll") (Join-Path $dist "imageformats\qsvg.dll") -Force
 & $qtBin --version | Out-Null
 
 $nsis = Get-Command "makensis.exe" -ErrorAction SilentlyContinue

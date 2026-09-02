@@ -91,6 +91,11 @@ cp "crates/els-app/Info.plist" "$app_bundle/Contents/Info.plist"
 cp "target/$target/release/els-app" "$app_bundle/Contents/MacOS/els-app"
 
 "$macdeployqt_bin" "$app_bundle" -qmldir=qml -always-overwrite
+# macdeployqt handles the linked QtSvg framework; copy the SVG image plugin
+# explicitly because the SVG files are QRC resources.
+mkdir -p "$app_bundle/Contents/PlugIns/imageformats"
+cp "$qt_prefix/plugins/imageformats/libqsvg.dylib" \
+  "$app_bundle/Contents/PlugIns/imageformats/libqsvg.dylib"
 rm -rf "$app_bundle/Contents/PlugIns/sqldrivers"
 cp resources/icons/macos/LLStudio.icns "$app_bundle/Contents/Resources/LLStudio.icns"
 cp "$ffmpeg_prefix/bin/ffmpeg" "$app_bundle/Contents/MacOS/ffmpeg"
