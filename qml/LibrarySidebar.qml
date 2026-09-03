@@ -156,35 +156,6 @@ Rectangle {
                     }
                 }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 36
-                    radius: 8
-                    color: elevatedBg
-                    border.color: borderColor
-
-                    Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        spacing: 8
-
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "⌕"
-                            color: textSecondary
-                            font.pixelSize: 14
-                        }
-
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "搜索视频/字幕"
-                            color: textSecondary
-                            font.pixelSize: 13
-                        }
-                    }
-                }
-
                 ScrollView {
                     id: libraryScroll
                     Layout.fillWidth: true
