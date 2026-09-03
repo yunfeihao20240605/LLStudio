@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.4.6] - 2026-09-03
+
+### 优化 (Improvements)
+
+- 移除学习库中尚未实现的“搜索视频/字幕”入口，避免显示无实际功能的操作项
+- 增加项目级发布规则指引，统一后续版本发布流程
+
+### 发布说明 (Release Notes)
+
+- 本版本清理学习库界面中的未实现入口，不影响现有视频管理、播放和训练功能
+
 ## [v0.4.5] - 2026-09-03
 
 ### 修复 (Bug Fixes)
